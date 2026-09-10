@@ -10,7 +10,15 @@ import { wrapDisplay } from '../term/index.js';
 import { BODY_INDENT, frame, type FramePane, type Paint } from '../term/index.js';
 import { EVENT_PANE, paneNamesOf } from '../panes.js';
 import type { AccessPane, WatchPanel } from '../types.js';
-import { since, type PaneBudget, type PaneName, type WatchClock, type WatchLayout, type WatchView } from './index.js';
+import {
+  selfTitle,
+  since,
+  type PaneBudget,
+  type PaneName,
+  type WatchClock,
+  type WatchLayout,
+  type WatchView,
+} from './index.js';
 import { innerWidth, paneBudget } from './layout.js';
 import { quotaBlock, serverBlock, serviceBlock, sessionBlock, taskBlock } from './blocks.js';
 import { repoLines, sshLine, versionLine } from './lines.js';
@@ -18,9 +26,6 @@ import { accessGroups, accessPane, accessTitle, eventGroups, eventPane, fitGroup
 
 /** How a watcher nobody is typing at (a pipe, a single run) is drawn. */
 const NO_VIEW: WatchView = { selected: null, scroll: {}, focus: null };
-
-/** The name shown in the frame's title. */
-const TITLE = 'next-watch';
 
 /** Join sections with a single blank line between them; an empty section disappears. */
 function joinBlocks(blocks: readonly string[][]): string[] {
@@ -150,7 +155,7 @@ export function renderWatchPanel(
   clock: WatchClock,
   view: WatchView = NO_VIEW,
 ): string[] {
-  const title = `${TITLE}  ${clock.time(p.nowMs)}  up ${since(p.nowMs, p.startedAtMs)}`;
+  const title = `${selfTitle(p.selfVersion)}  ${clock.time(p.nowMs)}  up ${since(p.nowMs, p.startedAtMs)}`;
   const focus = view.focus ?? null;
   // A focused pane hides the body, so that pane gets the whole frame.
   const body = focus === null ? panelBody(p, paint, layout, view, clock) : [];

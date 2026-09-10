@@ -156,6 +156,22 @@ describe('renderWatchPanel', () => {
     expect(text).toContain('claude 2.1.236 · codex 0.147.0 (latest 0.148.0)');
   });
 
+  // The order is the point: the name, then which next-watch it is, then the time. `versions`
+  // in the body is other people's CLIs and stays where it is.
+  it('puts its own version between the name and the clock', () => {
+    const text = renderPanel(panel({ selfVersion: '0.1.4' }), plain, LAYOUT).join('\n');
+    expect(text).toContain('next-watch 0.1.4  19:42:07  up 1h12m');
+  });
+
+  it('titles with the bare name when there is no version to show', () => {
+    // Null is a package.json that could not be read; undefined is a host that builds its own
+    // panel and never set the field. Neither may leave `next-watch null` on the heading.
+    for (const selfVersion of [null, undefined]) {
+      const text = renderPanel(panel({ selfVersion }), plain, LAYOUT).join('\n');
+      expect(text).toContain('next-watch  19:42:07  up 1h12m');
+    }
+  });
+
   it('shows the running tasks and the recently finished ones', () => {
     const text = renderPanel(panel(), plain, LAYOUT).join('\n');
     expect(text).toContain('build:site --limit 3');

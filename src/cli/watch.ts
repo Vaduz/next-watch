@@ -47,6 +47,7 @@ import {
   waitNext,
 } from './report.js';
 import { runGit } from '../io/git.js';
+import { packageVersion } from '../io/version.js';
 import { builtInHandlers } from './actions/handlers.js';
 import { streamCommand, type ActionContext, type Emit } from './actions/stream.js';
 import { WatchScreen } from './screen.js';
@@ -163,6 +164,7 @@ function banner(screen: WatchScreen, config: ResolvedConfig, head: string, args:
         dryRun: args.dryRun,
         panelSeconds: args.panel,
         remote: config.remote,
+        version: packageVersion(),
       },
       screen.paint,
     ),

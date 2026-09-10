@@ -26,6 +26,32 @@ describe('renderBanner', () => {
     expect(text).toContain('dry-run');
     expect(text).toContain('watching origin/main');
   });
+
+  const banner = (over: { version?: string | null } = {}): string =>
+    renderBanner(
+      {
+        nowMs: NOW,
+        root: '/r',
+        branch: 'main',
+        head: 'abcdef1234',
+        intervalSeconds: 60,
+        dryRun: false,
+        panelSeconds: 600,
+        remote: 'origin/main',
+        ...over,
+      },
+      plain,
+    ).join('\n');
+
+  // The same position as the frame's title, so the two headings agree.
+  it('puts its own version after the name', () => {
+    expect(banner({ version: '0.1.4' })).toContain('next-watch 0.1.4 watching origin/main');
+  });
+
+  it('prints the bare name when there is no version to show', () => {
+    expect(banner({ version: null })).toContain('next-watch watching origin/main');
+    expect(banner()).toContain('next-watch watching origin/main');
+  });
 });
 
 describe('renderBottomLine', () => {

@@ -6,6 +6,7 @@
  *  Every source arrives through the config: the servers from their adapters' `probe()`, the
  *  tasks from `tasks()`, and the optional sections from whichever providers are switched on. */
 import { readAccessRows } from '../io/readAccessRows.js';
+import { packageVersion } from '../io/version.js';
 import type { LocalSnapshot } from '../core/watchEvents.js';
 import type {
   AccessPane,
@@ -105,6 +106,7 @@ export async function collectWatchPanel(o: {
     services,
     versions: o.versions,
     ssh: o.ssh,
+    selfVersion: packageVersion(),
   };
 }
 

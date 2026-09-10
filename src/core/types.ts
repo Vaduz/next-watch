@@ -194,4 +194,8 @@ export interface WatchPanel {
   services: readonly ServiceCard[];
   /** Versions of the CLIs installed locally. */
   versions: readonly ToolVersionRow[];
+  /** **next-watch's own version**, for the frame's title — not one of `versions`, which are
+   *  other people's CLIs. Optional because a host may build a panel itself, and null where the
+   *  package's own `package.json` could not be read; either way the title is the bare name. */
+  selfVersion?: string | null;
 }

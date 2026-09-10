@@ -5,7 +5,7 @@
  *  the caller. */
 import { truncateDisplay, wrapDisplay } from '../term/index.js';
 import { markGlyph, type Paint } from '../term/index.js';
-import { since, type WatchClock } from './index.js';
+import { selfTitle, since, type WatchClock } from './index.js';
 
 /** The startup banner. No frame, and the same indent as the event rows that follow. */
 export function renderBanner(
@@ -19,6 +19,8 @@ export function renderBanner(
     panelSeconds: number;
     /** What is being watched, for the banner (`origin/main`). */
     remote: string;
+    /** next-watch's own version, shown after the name. Absent or null prints the bare name. */
+    version?: string | null;
   },
   paint: Paint,
 ): string[] {
@@ -29,7 +31,9 @@ export function renderBanner(
   ].filter(m => m !== '');
   return [
     '',
-    `  ${paint('next-watch', 'bold')} ${paint(`watching ${o.remote}`, 'dim')}  ${paint(modes.join(' · '), 'dim')}`,
+    // The name and the version are painted as one token: together they are the identity, and
+    // splitting the paint would read as two separate things.
+    `  ${paint(selfTitle(o.version), 'bold')} ${paint(`watching ${o.remote}`, 'dim')}  ${paint(modes.join(' · '), 'dim')}`,
     `  ${paint(o.root, 'dim')}  ${paint(o.branch, 'bold')} ${paint(o.head.slice(0, 7), 'accent')}  ${paint('Ctrl-C to stop', 'dim')}`,
     '',
   ];

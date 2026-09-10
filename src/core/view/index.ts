@@ -78,6 +78,18 @@ export function clockWithOffset(offsetMinutes: number): WatchClock {
   };
 }
 
+/** The watcher's own name, as the frame's title and the startup banner both say it. */
+export const SELF_NAME = 'next-watch';
+
+/** The name with the version after it (`next-watch 0.1.4`). **Both headings go through here**,
+ *  so the two cannot drift into saying it differently.
+ *
+ *  The version arrives as an argument because this layer reads no files; `io/version.ts` is
+ *  what knows where it comes from. Null or absent gives the bare name — a heading reading
+ *  `next-watch null` would be worse than one that simply does not say. */
+export const selfTitle = (version: string | null | undefined): string =>
+  version === null || version === undefined || version === '' ? SELF_NAME : `${SELF_NAME} ${version}`;
+
 /** The gap between two times as `1h22m`. The future and the unknown are `-`. */
 export function since(nowMs: number, thenMs: number | null): string {
   if (thenMs === null) return '-';
