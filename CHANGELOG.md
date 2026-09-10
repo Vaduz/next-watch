@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.1.3
+
+The SESSIONS section showed sessions that had been dead for months. On the machine this was
+found on, a session that died in June was still drawn in September, idle for `90d3h` — that
+figure is the age of the last status the file recorded, not an uptime, so nothing about the row
+looked impossible.
+
+The cause was a pid: over the months a watch runs, pids come round again, and both of the ghost
+rows had had theirs taken over by a thread of a root daemon. Three separate checks were letting
+them through, and all three are now stricter.
+
+- **A pid that cannot be signalled is not one of ours.** `isAlive` counts `EPERM` as alive,
+  which is right when the question is whether something still holds a port and wrong when it is
+  whether a pid is this user's own session. Sessions now ask `isSignalable`, a new export
+  alongside it; `isAlive` is unchanged, so nothing that depended on it moves.
+- **The recorded start time is compared.** The CLI writes the process's `starttime` into the
+  session file for exactly this purpose, and a mismatch against `/proc/<pid>/stat` now means the
+  process at that number is a different one. Where `/proc` cannot be read — anywhere but Linux,
+  or a record written before the field existed — the check abstains rather than guessing.
+- **A pid with no `ps` row no longer passes.** It used to count as "cannot tell, so let it
+  through", but a thread of another user's process has no row of its own while still answering
+  `/proc`. The waiver now applies only when `ps` failed as a whole, where no pid has a row.
+
+One row was also missing, and the same pass fixes it:
+
+- **Background sessions are found.** They exec the versioned binary
+  (`…/share/claude/versions/2.1.267 …`), whose last path segment is the version rather than a
+  name, so the pattern that matched only a trailing `claude` did not see them. A path segment
+  `claude` anywhere in the command is what counts now — a widening, so no shape that used to be
+  found is lost.
+
 ## 0.1.2
 
 More of what the first consumer needed, all of it about a host that already reads the same quota
