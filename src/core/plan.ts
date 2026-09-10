@@ -77,6 +77,32 @@ export function restartIfAny(paths: readonly string[]): (incoming: readonly stri
   return incoming => incoming.some(p => paths.includes(p));
 }
 
+/** The same predicate under the name that reads right on an `afterPull` hook, whose `runOn`
+ *  restarts nothing. One function, two names: a config saying `restartIfAny` beside a hook
+ *  that only rewrites a crontab would describe itself wrongly. */
+export const runIfAny = restartIfAny;
+
+/** A command to run **after a pull that brought something in**.
+ *
+ *  The servers restart because files they serve changed; this is for the rest of what a
+ *  checkout owns — a crontab to rewrite, a cache to warm — which no server adapter covers. */
+export interface AfterPullHook {
+  /** What the event log calls it. */
+  label: string;
+  command: string;
+  args?: readonly string[];
+  /** Whether these incoming paths call for it. **Omitted means every pull**, which is the
+   *  right default for something cheap and idempotent; `runIfAny` builds the usual shape for
+   *  anything that is neither. */
+  runOn?: (changedPaths: readonly string[]) => boolean;
+}
+
+/** The hooks these paths call for, in the order the config gave them. Filtering is separated
+ *  from running so the choice can be checked as a table without a process in sight. */
+export function hooksToRun<T extends AfterPullHook>(hooks: readonly T[], paths: readonly string[]): T[] {
+  return hooks.filter(h => h.runOn === undefined || h.runOn(paths));
+}
+
 function blockersFor(paths: readonly string[], blocked: readonly BlockedPath[]): WatchBlocker[] {
   const out: WatchBlocker[] = [];
   for (const rule of blocked) {

@@ -5,9 +5,12 @@ import { describe, expect, it } from 'bun:test';
 import {
   conflictingDirtyPaths,
   describePlan,
+  hooksToRun,
   planFromIncoming,
   restartIfAny,
   restartUnless,
+  runIfAny,
+  type AfterPullHook,
   type PullPolicy,
   type WatchPlan,
   type WatchServerPolicy,
@@ -210,5 +213,44 @@ describe('describePlan', () => {
 
   it('names each server it will restart', () => {
     expect(describePlan(plan(['package.json']))).toBe('npm install / restart admin / restart web');
+  });
+});
+
+describe('hooksToRun', () => {
+  const hook = (label: string, runOn?: (paths: readonly string[]) => boolean): AfterPullHook =>
+    runOn === undefined ? { label, command: 'npm' } : { label, command: 'npm', runOn };
+
+  /** The three shapes a hook list has: one that always runs, one gated on a path, and the
+   *  order they come back in. */
+  const HOOKS: AfterPullHook[] = [
+    hook('always'),
+    hook('cron:restore', runIfAny(['cron/schedule.json'])),
+    hook('warm:cache', runIfAny(['web/app/page.tsx', 'web/app/layout.tsx'])),
+  ];
+
+  const cases: [name: string, hooks: AfterPullHook[], paths: string[], expected: string[]][] = [
+    ['a pull that touches nothing gated still runs the ungated one', HOOKS, ['README.md'], ['always']],
+    ['a gated hook runs when its path arrives', HOOKS, ['cron/schedule.json'], ['always', 'cron:restore']],
+    [
+      'two gates can match at once',
+      HOOKS,
+      ['cron/schedule.json', 'web/app/page.tsx'],
+      ['always', 'cron:restore', 'warm:cache'],
+    ],
+    // The prefix is not enough: `runIfAny` matches whole paths, the same as `restartIfAny`.
+    ['a path that merely starts the same does not match', HOOKS, ['cron/schedule.json.bak'], ['always']],
+    ['no hooks configured is not an error', [], ['cron/schedule.json'], []],
+    ['a gated hook and nothing it wants', [hook('cron:restore', runIfAny(['cron/schedule.json']))], ['lib/x.ts'], []],
+  ];
+
+  for (const [name, hooks, paths, expected] of cases) {
+    it(name, () => {
+      expect(hooksToRun(hooks, paths).map(h => h.label)).toEqual(expected);
+    });
+  }
+
+  it('keeps the order the config gave, not the order the paths arrived in', () => {
+    const paths = ['web/app/page.tsx', 'cron/schedule.json'];
+    expect(hooksToRun(HOOKS, paths).map(h => h.label)).toEqual(['always', 'cron:restore', 'warm:cache']);
   });
 });

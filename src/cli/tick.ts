@@ -12,7 +12,7 @@
  *  the server adapters, and everything this has to say becomes an event, because the screen is
  *  the only outlet. */
 import { checkBranch, runGit, tryGit, tryGitNonInteractive } from '../io/git.js';
-import { conflictingDirtyPaths, describePlan, planFromIncoming, type WatchPlan } from '../core/plan.js';
+import { conflictingDirtyPaths, describePlan, hooksToRun, planFromIncoming, type WatchPlan } from '../core/plan.js';
 import {
   COMMIT_LOG_FORMAT,
   parseCommitLog,
@@ -25,7 +25,10 @@ import { describeIncoming } from '../core/view/incoming.js';
 import { SaidOnce, type RepoState, type WatchState } from '../core/watchState.js';
 import type { ResolvedConfig } from '../config.js';
 import { type Emit } from './actions/stream.js';
+import { applyPlan, runAfterPull, type RunCommand } from './apply.js';
 import { WatchScreen } from './screen.js';
+
+export type { RunCommand } from './apply.js';
 
 /** Commits and paths are **not all printed**. Forty of them arriving on a Monday must not
  *  scroll the terminal away, and what is left out is announced rather than cut silently. */
@@ -170,34 +173,6 @@ function reportIncoming(incoming: Incoming, plan: WatchPlan, screen: WatchScreen
   for (const line of details) screen.detail(line);
 }
 
-/** Install dependencies. The command is fixed because `package.json` is what a dependency
- *  change means, and the adapters restart afterwards either way. */
-async function install(config: ResolvedConfig, emit: Emit, run: RunCommand): Promise<boolean> {
-  emit('step', 'npm install ...');
-  const { ok, detail } = await run({ command: 'npm', args: ['install'], cwd: config.root });
-  emit(ok ? 'step' : 'error', ok ? 'npm install done' : `npm install failed${detail === null ? '' : `: ${detail}`}`);
-  return ok;
-}
-
-/** Running a command, injected so a test can watch what would have run. */
-export type RunCommand = (o: {
-  command: string;
-  args: readonly string[];
-  cwd: string;
-}) => Promise<{ ok: boolean; detail: string | null }>;
-
-/** Restart what the plan named, through the adapters. The same code path a typed `restart`
- *  takes, so the two cannot drift apart. */
-async function applyPlan(config: ResolvedConfig, plan: WatchPlan, emit: Emit, run: RunCommand): Promise<void> {
-  if (plan.install && !(await install(config, emit, run))) return;
-  const byId = new Map(config.servers.map(s => [s.id, s]));
-  for (const id of plan.restart) {
-    const server = byId.get(id);
-    if (server === undefined) continue;
-    await server.restart(emit);
-  }
-}
-
 /** Re-read HEAD and how far behind it is. **Read after the pull**, so the panel and the
  *  heartbeat show the state after the merge rather than reusing what the fetch saw. */
 export async function repoState(config: ResolvedConfig): Promise<RepoState> {
@@ -231,21 +206,33 @@ export async function tick(
     return incoming;
   }
   if (args.dryRun) {
-    if (said.fresh(`dry:${incoming.sha}`)) reportDryRun(incoming, plan, screen);
+    if (said.fresh(`dry:${incoming.sha}`)) reportDryRun(incoming, plan, config, screen);
     return incoming;
   }
   said.clear();
   if (!(await merge(config, screen))) return incoming;
   state.lastPull = { atMs: Date.now(), commits: incoming.behind };
   reportIncoming(incoming, plan, screen);
-  if (args.restart) await applyPlan(config, plan, ctx.emit, ctx.run);
+  if (args.restart) {
+    // `finally`, because the hooks must run **even when a restart failed or threw**: whether a
+    // crontab is current has nothing to do with whether a server came back up, and the day the
+    // build breaks is exactly the day a stale schedule hurts most.
+    try {
+      await applyPlan(config, plan, ctx.emit, ctx.run);
+    } finally {
+      await runAfterPull(config, incoming.paths, ctx.emit, ctx.run);
+    }
+  }
   return incoming;
 }
 
 /** The dry-run report, which says what would arrive in the same shape as what did. */
-function reportDryRun(incoming: Incoming, plan: WatchPlan, screen: WatchScreen): void {
+function reportDryRun(incoming: Incoming, plan: WatchPlan, config: ResolvedConfig, screen: WatchScreen): void {
   const nowMs = Date.now();
-  screen.event(nowMs, 'change', `(dry-run) ${incoming.behind} commit(s) would come in -> ${describePlan(plan)}`);
+  const hooks = hooksToRun(config.afterPull, incoming.paths);
+  // Named rather than counted: the point of a dry run is seeing which commands would run.
+  const then = hooks.length ? ` then ${hooks.map(h => h.label).join(', ')}` : '';
+  screen.event(nowMs, 'change', `(dry-run) ${incoming.behind} commit(s) would come in -> ${describePlan(plan)}${then}`);
   const shown = incoming.paths.slice(0, MAX_PATHS_SHOWN);
   const rest = incoming.paths.length - shown.length;
   for (const line of [...shown, ...(rest > 0 ? [`... ${rest} more file(s)`] : [])]) screen.detail(line);

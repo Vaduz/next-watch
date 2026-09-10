@@ -6,7 +6,7 @@
  *
  *  A config file is an ES module whose default export is a `NextWatchConfig`, found at
  *  `next-watch.config.mjs` in the working directory unless `--config` says otherwise. */
-import type { PullPolicy } from './core/plan.js';
+import type { AfterPullHook, PullPolicy } from './core/plan.js';
 import type { TaskRow } from './core/types.js';
 import type { WatchServerRow } from './core/types.js';
 import type { Mark, Tone } from './core/term/index.js';
@@ -63,6 +63,11 @@ export interface NextWatchConfig {
   servers: WatchServerAdapter[];
   /** The tasks running outside the watcher. Omitted means the section is not drawn. */
   tasks?: () => TaskRow[];
+  /** Commands to run **after a pull that brought something in**, in this order, once the
+   *  servers have been restarted. For what a checkout owns that no server adapter covers.
+   *  `--dry-run` lists them instead of running them, and `--no-restart` skips them with the
+   *  restarts. */
+  afterPull?: readonly AfterPullHook[];
   /** Which of the built-in sections to draw. Omitted means none of them. */
   providers?: WatchProviders;
 }
@@ -78,6 +83,7 @@ export interface ResolvedConfig {
   pull: PullPolicy;
   servers: WatchServerAdapter[];
   tasks: () => TaskRow[];
+  afterPull: readonly AfterPullHook[];
   /** The switches turned into readers. The loop only ever sees this side. */
   providers: ResolvedProviders;
 }
@@ -99,6 +105,7 @@ export function resolveConfig(config: NextWatchConfig): ResolvedConfig {
     pull: config.pull,
     servers: config.servers,
     tasks: config.tasks ?? ((): TaskRow[] => []),
+    afterPull: config.afterPull ?? [],
     providers: buildProviders({ appName: config.appName, providers: config.providers ?? {} }),
   };
 }

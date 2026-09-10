@@ -22,6 +22,8 @@ export type {
 export {
   restartIfAny,
   restartUnless,
+  runIfAny,
+  type AfterPullHook,
   type BlockedPath,
   type PullPolicy,
   type WatchPlan,

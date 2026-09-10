@@ -46,9 +46,12 @@ export { SaidOnce, initialState, nextSelection, panelDue, type RepoState, type W
 export {
   conflictingDirtyPaths,
   describePlan,
+  hooksToRun,
   planFromIncoming,
   restartIfAny,
   restartUnless,
+  runIfAny,
+  type AfterPullHook,
   type BlockedPath,
   type PullPolicy,
   type WatchBlocker,
