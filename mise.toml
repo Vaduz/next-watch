@@ -1,0 +1,5 @@
+[tools]
+node = "lts"
+# The toolchain is bun: install, test and the script runner. What is published still runs on
+# node, and `bin/next-watch.js` keeps its node shebang.
+bun = "latest"

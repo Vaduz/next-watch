@@ -1,0 +1,74 @@
+{
+  "name": "next-watch",
+  "version": "0.1.2",
+  "description": "A terminal dashboard that watches a Next.js repository: pulls origin, restarts dev servers, and shows what is happening on one screen.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "next-watch": "bin/next-watch.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./term": {
+      "types": "./dist/core/term/index.d.ts",
+      "default": "./dist/core/term/index.js"
+    },
+    "./access-log": {
+      "types": "./dist/core/accessLog.d.ts",
+      "default": "./dist/core/accessLog.js"
+    },
+    "./core": {
+      "types": "./dist/core/index.d.ts",
+      "default": "./dist/core/index.js"
+    },
+    "./process": {
+      "types": "./dist/io/processes.d.ts",
+      "default": "./dist/io/processes.js"
+    },
+    "./quota": {
+      "types": "./dist/core/quota/index.d.ts",
+      "default": "./dist/core/quota/index.js"
+    },
+    "./quota/io": {
+      "types": "./dist/io/quota/index.d.ts",
+      "default": "./dist/io/quota/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "bin",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "bunx tsc -p tsconfig.build.json",
+    "lint": "bunx eslint . --max-warnings 0",
+    "typecheck": "bunx tsc --noEmit -p tsconfig.json",
+    "test": "bun test",
+    "format": "bunx prettier --write .",
+    "check:format": "bunx prettier --check ."
+  },
+  "dependencies": {
+    "yargs": "^18.1.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.2",
+    "@types/node": "^26.4.1",
+    "@types/yargs": "^17.0.35",
+    "eslint": "^10.9.1",
+    "prettier": "3.9.6",
+    "simple-git-hooks": "^2.14.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.69.0"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "bun run check:format && bun run lint && bun run typecheck && bun test"
+  },
+  "packageManager": "bun@1.4.2"
+}

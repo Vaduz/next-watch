@@ -1,0 +1,32 @@
+# A pre-commit hook runs these same checks, so on a private repository a second place to run
+# them would only drift. That reasoning does not carry over to a public package: a pull request
+# can arrive from someone with no hook installed, so the checks run here too.
+#
+# The toolchain is bun. Node is installed alongside it to prove that what the build produces
+# runs under the runtime the package claims to support — bun is how it is made, not how it is
+# used.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: bun install --frozen-lockfile
+      - run: bun run check:format
+      - run: bun run lint
+      - run: bun run typecheck
+      - run: bun test
+      - run: bun run build
+      - run: node bin/next-watch.js --version
