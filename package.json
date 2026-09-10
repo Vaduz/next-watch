@@ -1,6 +1,6 @@
 {
   "name": "next-watch",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "A terminal dashboard that watches a Next.js repository: pulls origin, restarts dev servers, and shows what is happening on one screen.",
   "license": "Apache-2.0",
   "type": "module",

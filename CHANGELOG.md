@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.4
+
+- **The heading says which next-watch is drawing it.** The frame's title is now
+  `next-watch 0.1.4  12:34:56  up 1:02`, and the startup banner carries the version in the same
+  place. A watch runs for weeks, and until now the only record of which version started it was
+  in whatever shell scrolled past days ago.
+
+  The number is read from this package's own `package.json`, in one place, and never
+  hardcoded. `--version` is deliberately left as it was: yargs resolves that from the entry
+  point, so a host that embeds `parseArgs` in a CLI of its own keeps reporting **its** version
+  there, which is the right answer for that command.
+
+  For a host that builds a `WatchPanel` itself, both the field (`selfVersion`) and the banner's
+  `version` option are optional, and the heading without one is exactly what it was before.
+
 ## 0.1.3
 
 The SESSIONS section showed sessions that had been dead for months. On the machine this was
