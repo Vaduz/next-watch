@@ -32,7 +32,7 @@ function panel(overrides: Partial<WatchPanel> = {}): WatchPanel {
   return {
     nowMs: NOW,
     startedAtMs: NOW - 4_320_000,
-    repo: { root: '/home/vaduz/Code/site', branch: 'main', head: 'a1b2c3d4eeee', behind: 0 },
+    repo: { root: '/home/user/site', branch: 'main', head: 'a1b2c3d4eeee', behind: 0 },
     lastPull: { atMs: NOW - 660_000, commits: 4 },
     nextCheckSeconds: 42,
     ssh: null,
