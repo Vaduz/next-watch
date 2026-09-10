@@ -5,8 +5,9 @@
  *  A failure to read `ps` is returned rather than logged: a package does not own the host's
  *  logger, and the caller decides whether a missing column is worth a row on screen. */
 import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
 import { sleep } from '../core/util.js';
-import { parseEtimeTable, parsePsTable, type ProcInfo } from '../core/ps.js';
+import { parseEtimeTable, parseProcStartTicks, parsePsTable, type ProcInfo } from '../core/ps.js';
 
 export type { ProcInfo };
 
@@ -22,6 +23,39 @@ export function isAlive(pid: number): boolean {
     return true;
   } catch (e) {
     return (e as NodeJS.ErrnoException).code === 'EPERM';
+  }
+}
+
+/** Whether a pid exists **and belongs to this user**: the stricter twin of `isAlive`.
+ *
+ *  ⚠️ **EPERM is dead here**, which is the whole difference. `isAlive` is asked whether
+ *  something is still holding a port, where another user's process counts. This is asked
+ *  whether a pid is one of *ours* — a CLI session, a server this watch started — and there the
+ *  answer for a process we may not signal is no. */
+export function isSignalable(pid: number): boolean {
+  if (!pid || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** The `starttime` a pid was recorded with, or null where it cannot be read.
+ *
+ *  ⚠️ **Linux only.** There is no `/proc/<pid>/stat` elsewhere, and null there means the caller
+ *  falls back to whatever else it has for telling a reused pid from the original.
+ *
+ *  ⚠️ Readable **for a thread id too**, and threads do not appear in `ps -A`. That is what makes
+ *  this worth reading: a dead session's pid reused by a thread of a root daemon answers `/proc`
+ *  but with a different `starttime`. */
+export function procStartTicks(pid: number): string | null {
+  if (!pid || pid <= 0) return null;
+  try {
+    return parseProcStartTicks(fs.readFileSync(`/proc/${pid}/stat`, 'utf8'));
+  } catch {
+    return null;
   }
 }
 

@@ -8,8 +8,9 @@
  *      read, for the model and how much context the last reply carried.
  *
  *  **A json file existing does not mean the session is alive.** The files of sessions that died
- *  stay behind, so the pid has to be alive *and* the process at that pid has to be a `claude`
- *  (over a watch lasting days, pids are reused).
+ *  stay behind — dozens of them — and over the months a watch runs, their pids come round again
+ *  and are handed to something else. So three things have to agree before a row is drawn, and
+ *  `core`'s `isLiveSession` is where the three are weighed.
  *
  *  ⚠️ **The transcript is never read whole.** One of them passes 1.7MB, and this runs every
  *  time the panel is drawn; reading all of it would make the watcher heavy. A fixed amount of
@@ -17,11 +18,12 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { isAlive, type ProcInfo } from '../processes.js';
+import { isSignalable, procStartTicks, type ProcInfo } from '../processes.js';
 import { readTail } from '../fileWindow.js';
 import {
   claudeResumeCommand,
   isInteractiveSession,
+  isLiveSession,
   parseAgentSession,
   toSessionRow,
   type AgentSessionRecord,
@@ -58,19 +60,25 @@ function readSessionRecords(): AgentSessionRecord[] {
   return out;
 }
 
-/** The pids that are alive **and are a claude** (see the file's note on reused pids). */
-function livePids(records: readonly AgentSessionRecord[], procs: readonly ProcInfo[]): Set<number> {
-  const candidates = records.filter(r => isAlive(r.pid)).map(r => r.pid);
-  if (!candidates.length) return new Set();
+/** The pids whose session really is still running. **What counts as still running is
+ *  `isLiveSession`**; all this does is gather the three pieces of evidence it reads. */
+function livePids(records: readonly AgentSessionRecord[], procs: readonly ProcInfo[], psFailed: boolean): Set<number> {
+  if (!records.length) return new Set();
   const commands = new Map(procs.map(p => [p.pid, p.command]));
-  return new Set(
-    candidates.filter(pid => {
-      const command = commands.get(pid);
-      // Where ps could not be read, being alive is enough: a missing column beats a missing
-      // section.
-      return command === undefined || /(^|\/)claude(\s|$)/.test(command);
-    }),
-  );
+  const live = new Set<number>();
+  for (const r of records) {
+    const signalable = isSignalable(r.pid);
+    const evidence = {
+      signalable,
+      // A file read per record, and there are dozens of dead ones, so `/proc` is only opened
+      // for a pid that answered the cheaper check first.
+      procStartTicks: signalable ? procStartTicks(r.pid) : null,
+      command: commands.get(r.pid),
+      psFailed,
+    };
+    if (isLiveSession(r, evidence)) live.add(r.pid);
+  }
+  return live;
 }
 
 /** Where the transcript is. The project slug is the cwd with its separators replaced. */
@@ -165,15 +173,18 @@ function restartWay(
 /** The live interactive sessions as rows, **with the watcher's own marked**.
  *
  *  `procs`, `own` (the pids of this process's ancestors) and `panes` are passed in, so ps and
- *  tmux are each run once per look rather than once per agent. */
+ *  tmux are each run once per look rather than once per agent. `psFailed` says whether `procs`
+ *  is empty because nothing matched or because `ps` did not run, which is the difference
+ *  between a pid being dead and being unknown. */
 export function liveClaudeSessions(
   nowMs: number,
   procs: readonly ProcInfo[],
   own: ReadonlySet<number>,
   panes: readonly TmuxPane[] = [],
+  psFailed = false,
 ): AgentSessionRow[] {
   const records = readSessionRecords().filter(isInteractiveSession);
-  const alive = livePids(records, procs);
+  const alive = livePids(records, procs, psFailed);
   return records
     .filter(r => alive.has(r.pid))
     .map(r =>

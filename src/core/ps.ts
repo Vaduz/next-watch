@@ -39,6 +39,29 @@ export function parseEtimeTable(stdout: string): Map<number, number> {
   return out;
 }
 
+/** Field 22 (`starttime`) of one `/proc/<pid>/stat` line, as the raw digits, or null when the
+ *  line does not parse. Reading the file belongs to `io/`.
+ *
+ *  ⚠️ **The `comm` field is hostile to a naive split**: it is the executable's name inside
+ *  parentheses and may itself hold spaces and parentheses (`(tmux: server)`). So the cut is at
+ *  the **last** `") "`, not the first. What follows starts at field 3, which puts `starttime`
+ *  at index 19.
+ *
+ *  The value stays a string because that is how the CLI records it in the session file, and the
+ *  only thing done with it is comparing the two for equality. */
+export function parseProcStartTicks(stat: string): string | null {
+  const end = stat.lastIndexOf(') ');
+  if (end === -1) return null;
+  // As in `parseEtimeTable`: a short line makes this undefined at runtime, which the compiler
+  // does not show because `noUncheckedIndexedAccess` is off.
+  const fields: (string | undefined)[] = stat
+    .slice(end + 2)
+    .trim()
+    .split(/\s+/);
+  const ticks = fields[19];
+  return ticks !== undefined && /^\d+$/.test(ticks) ? ticks : null;
+}
+
 /** A pid and its ancestors up to the root, starting with the pid itself.
  *
  *  The `seen` set guards against a cycle: `ppid` comes from a snapshot that can be internally

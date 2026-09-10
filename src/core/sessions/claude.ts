@@ -28,10 +28,21 @@ export interface AgentSessionRecord {
   entrypoint: string | null;
   /** The version it started with. Older files do not have it, so this can be null. */
   version: string | null;
+  /** The `starttime` of the process, which the CLI records **so that a reused pid can be told
+   *  apart from the original**. Digits as written, not a date. */
+  procStart: string | null;
 }
 
 const str = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null);
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+
+/** A clock-tick count as written. The CLI writes it as a string; a number is accepted too, so
+ *  that the comparison does not silently start failing if that ever changes. */
+const ticks = (v: unknown): string | null => {
+  if (typeof v === 'string') return /^\d+$/.test(v) ? v : null;
+  if (typeof v === 'number' && Number.isInteger(v) && v >= 0) return String(v);
+  return null;
+};
 
 /** Read one file. Without a readable pid it is **not a session** and returns null. */
 export function parseAgentSession(raw: string): AgentSessionRecord | null {
@@ -57,7 +68,60 @@ export function parseAgentSession(raw: string): AgentSessionRecord | null {
     kind: str(o.kind),
     entrypoint: str(o.entrypoint),
     version: str(o.version),
+    procStart: ticks(o.procStart),
   };
+}
+
+/** Whether a `ps` command column is the CLI itself.
+ *
+ *  Two shapes run side by side on one machine: `claude …`, and the versioned binary a
+ *  background session execs, `~/.local/share/claude/versions/2.1.267 --session-id …`, whose
+ *  **last path segment is the version, not a name**. So what counts is a path segment `claude`
+ *  anywhere in the command — a strict widening of matching only the argv[0] basename, so no
+ *  shape that used to be found is lost.
+ *
+ *  `@anthropic-ai/claude-code/cli.js` is not a match: its segment is `claude-code`. */
+const CLAUDE_COMMAND = /(^|\/)claude(\/|\s|$)/;
+
+export const isClaudeCommand = (command: string): boolean => CLAUDE_COMMAND.test(command);
+
+/** What the OS says about one session's pid, gathered by `io/`.
+ *
+ *  ⚠️ **`undefined` and `null` carry meaning here.** A `command` of `undefined` is "`ps` had no
+ *  row", not "the row was empty", and a `procStartTicks` of null is "`/proc` could not be
+ *  read", not "it started at tick zero". `isLiveSession` turns on both. */
+export interface PidEvidence {
+  /** `kill(pid, 0)` succeeded outright. **EPERM is false** — see `isLiveSession`. */
+  signalable: boolean;
+  /** `starttime` from `/proc/<pid>/stat`, or null where `/proc` could not be read. */
+  procStartTicks: string | null;
+  /** The `ps` row's command, or undefined when `ps` had no row for this pid. */
+  command: string | undefined;
+  /** Whether `ps` failed as a whole. A property of the snapshot rather than of the pid, carried
+   *  here so that the decision reads as one table. */
+  psFailed: boolean;
+}
+
+/** Whether the session this record describes is the process still running at its pid.
+ *
+ *  Three separate ways a dead session used to be shown as live, and all three were seen on one
+ *  machine — a session that died in June sat in the panel in September, because its pid had
+ *  been taken over by a thread of a root daemon. */
+export function isLiveSession(r: AgentSessionRecord, e: PidEvidence): boolean {
+  // 1. The signal. The CLI runs as the user watching it, so a pid this process may not signal
+  //    is not one of its sessions. EPERM used to count as alive, which is right when the
+  //    question is "is something still holding that port" and wrong when it is "is this mine".
+  if (!e.signalable) return false;
+  // 2. The start time. Over a watch lasting days, pids come round again; the record carries the
+  //    process's `starttime` for exactly this comparison. Where either side is missing (no
+  //    `/proc`, or a record written before the field existed) the question is left to the
+  //    others rather than answered by a guess.
+  if (r.procStart !== null && e.procStartTicks !== null && r.procStart !== e.procStartTicks) return false;
+  // 3. The command. A pid with no `ps` row is running nothing this can recognise — a thread of
+  //    another user's process has no row of its own, yet `/proc/<tid>/stat` still reads. Only a
+  //    `ps` that failed outright is worth waiving the check for, because then no pid has a row.
+  if (e.command === undefined) return e.psFailed;
+  return isClaudeCommand(e.command);
 }
 
 /** Whether a session belongs in the list.

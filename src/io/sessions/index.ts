@@ -18,12 +18,12 @@ import type { AgentSessionRow } from '../../core/types.js';
 
 /** The live interactive sessions, busy ones first. */
 export function liveAgentSessions(nowMs: number, selfPid: number = process.pid): AgentSessionRow[] {
-  const { procs } = psSnapshot();
+  const { procs, error } = psSnapshot();
   const own = new Set(ancestorChain(procs, selfPid));
   // With no tmux this is empty, which only costs those rows their restart verb.
   const panes = tmuxPanes(nowMs);
   return sortSessionRows([
-    ...liveClaudeSessions(nowMs, procs, own, panes),
+    ...liveClaudeSessions(nowMs, procs, own, panes, error !== null),
     ...liveCodexSessions(nowMs, procs, own, panes),
   ]);
 }
