@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.1.6
+
+- **`--version` reported the wrong number when next-watch was installed as a dependency**, which
+  is the ordinary way it is run. It printed the version of **the project it was installed into**.
+  Measured against 0.1.5: a scratch project at `1.0.0` with next-watch 0.1.5 installed answered
+  `1.0.0` to `next-watch --version`.
+
+  Nothing was ever asked of yargs, so it guessed, and its ESM shim guesses with
+
+  ```js
+  __dirname.substring(0, __dirname.lastIndexOf('node_modules'));
+  ```
+
+  — the directory above the `node_modules` yargs itself sits in, which is the consuming
+  application's root, not this package's. Inside a checkout of next-watch the same expression
+  lands on next-watch, which is why the number looked right in development and in the two
+  releases before this one.
+
+  `main` now passes the version it reads from this package's own `package.json` — the same
+  single source the panel heading uses, so the heading and `--version` can no longer disagree.
+  0.1.5 shipped a panel saying `next-watch 0.1.5` while `--version` said something else
+  entirely.
+
+  `parseArgs` takes it as an option (`version`), left undefined by default: a host embedding
+  these flags in a CLI of its own **does** own the `node_modules` tree, so yargs' guess is the
+  right answer for that host's `--version`, and nothing changes for them.
+
 ## 0.1.5
 
 - **`afterPull`: commands to run once a pull has landed.** The servers restart because files
