@@ -36,14 +36,30 @@ export interface ParseArgsOptions {
   scriptName?: string;
   /** Whether `--config` exists. Defaults to true. */
   config?: boolean;
+  /** What `--version` prints.
+   *
+   *  ⚠️ **Pass this whenever the command is next-watch's own**, as `main` does. Left to yargs,
+   *  the number is wrong the moment the package is installed as a dependency: its ESM shim
+   *  guesses with `__dirname.substring(0, __dirname.lastIndexOf('node_modules'))`, which lands
+   *  on **whichever project owns the `node_modules` tree** — the consuming application, not
+   *  this package. Measured: a project at 1.0.0 with next-watch 0.1.5 installed printed
+   *  `1.0.0`.
+   *
+   *  It is left undefined by default because that guess is right for a host embedding these
+   *  flags in a CLI of its own: that host does own the tree, so it gets its own version, which
+   *  is the correct answer for its `--version`. */
+  version?: string;
 }
 
 export function parseArgs(o: ParseArgsOptions = {}, argv: readonly string[] = hideBin(process.argv)): Args {
   // The option is **not defined** rather than hidden when it is off: `strict()` then refuses
   // `--config` outright, instead of accepting it and doing nothing with it.
-  const base = yargs([...argv])
+  const named = yargs([...argv])
     .scriptName(o.scriptName ?? 'next-watch')
     .usage('$0 [options]', 'watch a remote branch, pull it, and restart only what needs restarting');
+  // Only when the caller knows the number. Calling `.version(undefined)` would not leave the
+  // guess alone — it would print `unknown`.
+  const base = o.version === undefined ? named : named.version(o.version);
   const a = (
     (o.config ?? true)
       ? base.option('config', { type: 'string', default: DEFAULT_CONFIG, describe: 'path to the config file' })

@@ -28,4 +28,12 @@ describe('parseArgs', () => {
     expect(a.access).toBeNull();
     expect(parseArgs({}, ['--log', '0']).log).toBe(0);
   });
+  // yargs prints the version and exits, so what is checked here is that the option is accepted
+  // and that parsing the rest is unaffected. That `main` passes a number at all is the fix:
+  // yargs' own guess reads whichever package.json owns the node_modules tree, which for an
+  // installed next-watch is the consuming project's.
+  it('takes a version from the caller without disturbing the other flags', () => {
+    expect(parseArgs({ version: '9.9.9' }, ['--interval', '7']).interval).toBe(7);
+    expect(parseArgs({ version: '9.9.9' }, []).config).toBe(DEFAULT_CONFIG);
+  });
 });

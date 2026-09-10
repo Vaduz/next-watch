@@ -7,6 +7,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { asRecord } from '../core/util.js';
 import { parseArgs } from './args.js';
+import { packageVersion } from '../io/version.js';
 import { startWatch } from './watch.js';
 import type { NextWatchConfig } from '../config.js';
 
@@ -30,7 +31,9 @@ export async function loadConfig(file: string): Promise<NextWatchConfig> {
 }
 
 export async function main(argv: readonly string[]): Promise<number> {
-  const args = parseArgs({}, argv);
+  // The version is passed rather than guessed: see `ParseArgsOptions.version`. Null (an
+  // unreadable package.json) falls back to the guess, which is no worse than what it replaces.
+  const args = parseArgs({ version: packageVersion() ?? undefined }, argv);
   try {
     return await startWatch(await loadConfig(args.config), args);
   } catch (err) {
