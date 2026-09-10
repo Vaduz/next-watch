@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.1.5
+
+- **`afterPull`: commands to run once a pull has landed.** The servers restart because files
+  they serve changed; this is for the rest of what a checkout owns and no server adapter covers
+  — a crontab to rewrite, a cache to warm.
+
+  ```js
+  afterPull: [
+    {
+      label: 'cron:restore',
+      command: 'npm',
+      args: ['run', 'cron:restore'],
+      runOn: runIfAny(['cron/schedule.json']),
+    },
+  ];
+  ```
+
+  `runOn` decides whether the incoming paths call for it, exactly as a server's `restartOn`
+  does; omitted, the hook runs after every pull that brought something in. `runIfAny` is
+  `restartIfAny` under the name that reads right on a hook that restarts nothing.
+
+  The hooks run **after** the restarts, in the order given, each with its own row in the event
+  log. `--dry-run` names them instead of running them, and `--no-restart` skips them along with
+  the restarts.
+
+  ⚠️ **A hook that fails stops nothing** — not the hooks after it, and not the watch. This is
+  deliberately unlike a failed `npm install`, which does stop the restarts: there, carrying on
+  would restart servers onto a tree whose dependencies never landed. Here the merge has already
+  happened and cannot be taken back, so a failure is a red row and the run continues. For the
+  same reason the hooks run even when a restart failed: whether a crontab is current has
+  nothing to do with whether a server came back up, and the day the build breaks is the day a
+  stale schedule hurts most.
+
+- `applyPlan` and the hooks moved out of `cli/tick.ts` into `cli/apply.ts` — deciding whether
+  to pull and doing what a pull implies are two jobs, and the file had grown past the line
+  limit. `RunCommand` is still exported from both.
+
 ## 0.1.4
 
 - **The heading says which next-watch is drawing it.** The frame's title is now
