@@ -76,6 +76,16 @@ export interface ScriptServerEntry {
   /** A script to run **before anything is stopped**. A build that fails leaves the running
    *  server alone and says so, which is the rule every adapter here is held to. */
   build?: string;
+  /** Whether this server **outlives the watch**.
+   *
+   *  A detached server is spawned into its own process group with its output going to the log
+   *  file, tracked through `<logDir>/servers/<id>.pid`, and **adopted** by the next watch that
+   *  finds the process still running — so closing the dashboard does not take the site down, and
+   *  opening it again does not start a second one onto a taken port.
+   *
+   *  ⚠️ It is **not stopped when the watch exits**, which is the whole point: stopping it is a
+   *  thing somebody asks for, with `(s)top` on the screen or by signalling it themselves. */
+  detached?: boolean;
   /** What to prepare before **every** start, including the one inside a restart: an npm script
    *  name, or a function.
    *

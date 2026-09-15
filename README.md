@@ -221,6 +221,7 @@ export default {
       script: 'dev', // `<pm> run dev` — exactly what `--start dev` builds
       // build: 'build',            // runs first; a build that fails leaves the old server serving
       // preStart: 'prepare:web',   // an npm script, or async emit => {}; before every start
+      // detached: true,            // goes on running after the watch closes; the next one adopts it
       // restartPaths: ['web/', 'lib/', 'package.json'],  // restart only for these prefixes
       // ignorePaths: ['docs/'],    // or the opposite: restart for anything except these
       // label: 'the site',         // what the row is called on screen; the id by default
@@ -303,6 +304,18 @@ A config file and `--start` work together: the scripts named on the command line
 the file's own `servers`, and an id that is already taken is refused rather than silently doubled.
 `--build` belongs to the servers named on the command line — a described entry carries its own.
 `providers` in the file always wins over what a flag would have switched on.
+
+**`detached: true` is for a server that should not go down when the dashboard does.** It is
+spawned into its own process group with its output going straight to its log file, and a note is
+left in `<logDir>/servers/<id>.pid`. The next watch reads that note and **adopts** the process it
+names — so reopening the dashboard shows the running server rather than failing to start a second
+one onto a taken port. It is deliberately **not** stopped when the watch exits; stopping it is
+something a person asks for, with `(s)top` on the screen.
+
+The note is only trusted when the process it names is still the one it was written about: alive,
+signalable by this user, running something whose command line still names the script, and — on
+Linux, where `/proc` says so — started at the moment recorded. Pids get reused, and a note is a
+hint about the world rather than a fact.
 
 Two things a repository often reaches for are already above and need nothing new: `pull.blocked`
 is where paths that must never arrive go, and `afterPull` is where a command that has to run once

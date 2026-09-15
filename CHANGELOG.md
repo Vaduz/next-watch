@@ -31,6 +31,26 @@
   `--build` on the command line still belongs to the servers named with `--start`; a described
   entry carries its own.
 
+- **`detached: true` on a described server keeps it running after the watch closes.** Until now
+  every server next-watch spawned died with it, which is right for a dev server and wrong for the
+  one actually serving a site: closing the dashboard should not take the site down.
+
+  A detached server is spawned into its own process group with its output going straight to its
+  log file — a pipe would die with the parent — and a note is left in
+  `<logDir>/servers/<id>.pid`. The next watch reads that note and **adopts** the process, so
+  reopening the dashboard shows the running server instead of failing to start a second one onto
+  a port that is already taken. Its address comes from the log file, which remembers across runs.
+
+  ⚠️ The note is trusted only when the process it names is still the one it was written about:
+  alive, signalable by this user, running something whose command line still names the script,
+  and — on Linux, from `/proc/<pid>/stat` — started at the moment recorded. Pids are reused, and
+  signalling a stranger's process because a file three days old still names its number is the
+  failure worth spending three checks to avoid. A note that fails any of them is removed as it is
+  read.
+
+  It is **not** stopped when the watch exits; that is the point. Stopping it is something a person
+  asks for, and `(s)top` signals the whole process group and takes the note away.
+
   **A described server is started when the watch starts**, exactly as a `--start` one is — the
   watcher spawns that child itself, so nothing else was ever going to. An adapter written by hand
   is still left alone, because whether its server is already running (under systemd, in another

@@ -1,7 +1,7 @@
 // Turning a described server into an adapter. What is worth pinning is the part a repository
 // writes and then trusts: which incoming paths restart it, and what a restart is going to do.
 import { describe, expect, it } from 'bun:test';
-import { scriptAdapter, type ScriptServerContext } from './scriptServer.js';
+import { scriptAdapter, type ScriptServerContext, type ServerChild } from './scriptServer.js';
 import type { ScriptServerEntry } from '../config.js';
 
 const CONTEXT: ScriptServerContext = { manager: 'bun', root: '/repo', logDir: '/repo/log' };
@@ -160,6 +160,66 @@ describe('scriptAdapter, the order a restart takes', () => {
     // spawning anything.
     expect(await adapter.start(() => undefined)).toBe(false);
     expect(steps).toEqual(['run prepare']);
+  });
+});
+
+// ⚠️ A detached server is still running when the next watch opens, and `start` is called on
+// every described server at startup. Preparing for a start that is not going to happen would
+// rewrite the material a live server is serving from — which is exactly what `preStart` is
+// warned about doing.
+describe('scriptAdapter, a server that is already up', () => {
+  /** A child that is already running and records what was asked of it. */
+  const runningChild = (asked: string[]): ServerChild => ({
+    row: () => ({
+      server: 'web',
+      state: 'up',
+      url: 'http://localhost:3000',
+      mode: 'bun',
+      owner: 'pid 1',
+      uptimeSeconds: 10,
+      logFiles: [],
+    }),
+    start: () => {
+      asked.push('start');
+      return Promise.resolve(true);
+    },
+    stop: () => {
+      asked.push('stop');
+      return Promise.resolve(true);
+    },
+  });
+
+  const adapterWith = (asked: string[], runs: string[]): ReturnType<typeof scriptAdapter> =>
+    scriptAdapter(
+      { id: 'web', script: 'dev', preStart: 'prepare' },
+      {
+        ...CONTEXT,
+        child: () => runningChild(asked),
+        run: r => {
+          runs.push(`run ${r.args[1]}`);
+          return Promise.resolve({ ok: true, detail: null });
+        },
+      },
+    );
+
+  it('does not prepare when the start is going to be an adoption', async () => {
+    const asked: string[] = [];
+    const runs: string[] = [];
+
+    expect(await adapterWith(asked, runs).start(() => undefined)).toBe(true);
+
+    expect(runs).toEqual([]);
+    expect(asked).toEqual(['start']);
+  });
+
+  it('still prepares on a restart, which really does stop and start it', async () => {
+    const asked: string[] = [];
+    const runs: string[] = [];
+
+    await adapterWith(asked, runs).restart(() => undefined);
+
+    expect(runs).toEqual(['run prepare']);
+    expect(asked).toEqual(['stop', 'start']);
   });
 });
 

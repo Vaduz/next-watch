@@ -13,7 +13,9 @@ import path from 'node:path';
 import { restartIfPrefixed, restartUnless } from '../core/plan.js';
 import type { PackageManager } from '../core/packageManager.js';
 import { ChildServer } from '../io/scriptServer.js';
+import { DetachedServer } from '../io/detachedServer.js';
 import { streamCommand, type Emit } from './actions/stream.js';
+import type { WatchServerRow } from '../core/types.js';
 import type { NextWatchConfig, ScriptServerEntry, WatchServerAdapter } from '../config.js';
 import { isScriptServer } from '../config.js';
 
@@ -37,8 +39,9 @@ export interface ScriptServerContext {
   root: string;
   /** Where the log files go. Absolute, and already resolved against `root`. */
   logDir: string;
-  /** Only a test passes this. */
+  /** Only a test passes these. */
   run?: RunStep;
+  child?: (entry: ScriptServerEntry) => ServerChild;
 }
 
 /** What `restartOn` becomes. Giving both lists is refused in `load.ts`, so this only has to pick
@@ -105,17 +108,32 @@ function restartSteps(entry: ScriptServerEntry): string[] {
   return steps.filter((s): s is string => s !== null);
 }
 
-export function scriptAdapter(entry: ScriptServerEntry, o: ScriptServerContext): WatchServerAdapter {
-  const child = new ChildServer({
+/** The two ways of holding a server, behind the three things an adapter asks of one. Which is
+ *  used is `detached`, and nothing above this line has to know which it got. */
+export interface ServerChild {
+  row: () => WatchServerRow;
+  start: (emit: Emit) => Promise<boolean>;
+  stop: (emit: Emit) => Promise<boolean>;
+}
+
+function childFor(entry: ScriptServerEntry, o: ScriptServerContext): ServerChild {
+  if (o.child !== undefined) return o.child(entry);
+  const common = {
     id: entry.id,
     command: o.manager,
-    args: ['run', entry.script],
+    args: ['run', entry.script] as const,
     cwd: o.root,
     logFile: path.join(o.logDir, `${entry.id}.txt`),
     // Which package manager is running it — the one thing about this server that is not already
     // in its name.
     mode: o.manager,
-  });
+  };
+  if (entry.detached !== true) return new ChildServer(common);
+  return new DetachedServer({ ...common, logDir: o.logDir, script: entry.script, mode: `${o.manager} detached` });
+}
+
+export function scriptAdapter(entry: ScriptServerEntry, o: ScriptServerContext): WatchServerAdapter {
+  const child = childFor(entry, o);
   const build = async (emit: Emit): Promise<boolean> =>
     entry.build === undefined ? true : runNamed(o, entry.id, entry.build, 'build', emit);
   return {
@@ -123,7 +141,12 @@ export function scriptAdapter(entry: ScriptServerEntry, o: ScriptServerContext):
     label: entry.label,
     restartOn: restartRuleFor(entry),
     probe: () => Promise.resolve(child.row()),
-    start: async emit => ((await prepared(o, entry, emit)) ? child.start(emit) : false),
+    // ⚠️ **Adoption is not a start.** A detached server is still running when the next watch
+    // opens, and `start` is called on every described server at startup: preparing for a start
+    // that is not going to happen would rewrite the material a live server is serving from. The
+    // same guard covers a person pressing `st(a)rt` on a row that is already up.
+    start: async emit =>
+      child.row().state === 'up' ? child.start(emit) : (await prepared(o, entry, emit)) ? child.start(emit) : false,
     stop: emit => child.stop(emit),
     restart: async emit => {
       // Both of these can fail, and both run **before the stop**, so a failure leaves the old
