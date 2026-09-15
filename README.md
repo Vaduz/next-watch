@@ -59,38 +59,35 @@ directory's name), `root` is the working directory, `branch` is `main`, the remo
 
 ## What you see, and what you can do
 
-One screen, redrawn in place. This is a real one, watching a project whose only setup was
-`--start dev`:
+One screen, redrawn in place. This is a real one, watching a throwaway project with one described
+server and two of the optional sections turned on — the agent sessions and the service status:
 
 ```
-╭─ next-watch 0.2.0  01:02:18  up 10s ─────────────────────────────────────────────────────────────────────╮
-│ REPO     /tmp/next-watch-demo/site  main 43eb6d1  in sync with origin/main                               │
-│          nothing pulled during this watch · next git check 3590s                                         │
-│                                                                                                          │
-│    SERVER  STATE  URL                    OWNER        MODE  UPTIME                                       │
-│    dev     up     http://localhost:3100  pid 2591974  bun      10s                                       │
-│                                                                                                          │
-│ TASK  ID           STATE    ELAPSED  ENDED                                                               │
-│   seed-images                                                                                            │
-│       seed-images  running     1:34                                                                      │
-│   sitemap                                                                                                │
-│       sitemap      done          31  2m ago                                                              │
-├─ event log ──────────────────────────────────────────────────────────────────────────────────────────────┤
-│ 01:02:08 ◎ next-watch started (git every 3600s · keys on)                                                │
-│ 01:02:08 ○ dev: bun run dev                                                                              │
-│ 01:02:08 ○ dev is listening on http://localhost:3100                                                     │
-│ 01:02:08 ◆ server dev is up at http://localhost:3100 (bun)                                               │
-├─ dev access  /tmp/next-watch-demo/site/log/dev.txt ──────────────────────────────────────────────────────┤
-│           $ node server.mjs                                                                              │
-│ 01:02:15  GET                200  13ms  /                                                                │
-│ 01:02:15  GET                200  13ms  /about                                                           │
-│ 01:02:15  GET                200  12ms  /pricing                                                         │
-│ 01:02:15  GET                404  12ms  /missing                                                         │
-│ 01:02:16  GET                200  12ms  /                                                                │
-│ 01:02:16  GET                200  13ms  /about                                                           │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ next-watch 0.3.0  01:42:42  up 18s ───────────────────────────────────────╮
+│ REPO     /tmp/nw-shot/site  main 6342d5c  in sync with origin/main         │
+│          nothing pulled during this watch · next git check 3583s           │
+│                                                                            │
+│    SERVER  STATE  URL                    OWNER        MODE  UPTIME         │
+│    web     up     http://localhost:3400  pid 2833504  bun      17s         │
+│                                                                            │
+│ SESSION  TREE        AGENT   STATUS  MODEL      CONTEXT  IDLE    VER       │
+│   What does the dev script in package.json…                                │
+│          site        codex   idle    -              15k     17s  0.154.0   │
+│   site-66                                                                  │
+│          site        claude  idle    opus-5         39k      1m  2.1.272   │
+│                                                                            │
+│    SERVICE  Claude  ●  All Systems Operational                             │
+│             OpenAI  ●  All Systems Operational                             │
+├─ event log ────────────────────────────────────────────────────────────────┤
+│ 01:42:24 ○ web: bun run dev                                                │
+│ 01:42:24 ○ web is listening on http://localhost:3400                       │
+│ 01:42:24 ◆ server web is up at http://localhost:3400 (bun)                 │
+├─ web access  /tmp/nw-shot/site/log/web.txt ────────────────────────────────┤
+│ 01:42:34  GET                404  11ms  /missing                           │
+│ 01:42:34  GET                200  11ms  /                                  │
+╰────────────────────────────────────────────────────────────────────────────╯
 
-  ⠼ Tab select · up/down scroll · (h)elp · (q)uit
+  ⠏ Tab select · up/down scroll · (h)elp · (q)uit
 ```
 
 What the sections are. The first five are the repository itself and are always drawn:

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- docs: the dashboard capture in the README was retaken at **80 columns** and now shows the two
+  sections it was missing — the live Claude and Codex sessions, and the service-status rows. The
+  old one was 108 columns wide, which GitHub renders with a horizontal scrollbar, and it had
+  `providers` empty, so the section people come for was not in the picture at all.
+
 ## 0.3.0
 
 - **A server can be described in the config file instead of written out.** `servers` now takes
