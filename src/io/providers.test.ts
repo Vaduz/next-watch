@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'bun:test';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildProviders } from './providers.js';
+import { buildProviders, zeroConfigProviders, type WatchProviders } from './providers.js';
 
 const build = (providers: Parameters<typeof buildProviders>[0]['providers']): ReturnType<typeof buildProviders> =>
   buildProviders({ appName: 'site', providers });
@@ -60,5 +60,51 @@ describe('buildProviders', () => {
 
     expect(p.quotas).toBeUndefined();
     expect(p.quotaSession?.read).toBeTypeOf('function');
+  });
+});
+
+// What a run with no config file draws. The line that matters is the one between a section that
+// only looks and the one that spends: everything is on, and only `quotaSession` waits to be
+// asked for.
+describe('zeroConfigProviders', () => {
+  const cases: [name: string, quotaSession: boolean, expected: WatchProviders][] = [
+    [
+      'every section that only looks is on, and the one that spends is not',
+      false,
+      { agentSessions: true, quota: true, quotaSession: false, services: true, tools: true, sshAgent: true },
+    ],
+    [
+      'the quota session, once it has been asked for',
+      true,
+      { agentSessions: true, quota: true, quotaSession: true, services: true, tools: true, sshAgent: true },
+    ],
+  ];
+
+  for (const [name, quotaSession, expected] of cases) {
+    it(name, () => {
+      expect(zeroConfigProviders({ quotaSession })).toEqual(expected);
+    });
+  }
+
+  it('turns into the readers the loop wants, sandbox and all', () => {
+    const off = buildProviders({ appName: 'site', providers: zeroConfigProviders({ quotaSession: false }) });
+    const on = buildProviders({ appName: 'site', providers: zeroConfigProviders({ quotaSession: true }) });
+
+    expect(off.sessions).toBeTypeOf('function');
+    expect(off.quotas).toBeTypeOf('function');
+    expect(off.services).toBeTypeOf('function');
+    expect(off.toolVersions).toBeTypeOf('function');
+    expect(off.sshAgent).toBeTypeOf('function');
+    // Nothing is started on the watcher's own initiative until the flag is given.
+    expect(off.quotaSession).toBeNull();
+    expect(on.quotaSession?.cwd).toBe(join(tmpdir(), 'site'));
+  });
+
+  it('keeps the documented default for installing new CLI releases', () => {
+    // `tools` is unchanged by the absence of a config file: it reports and installs, as the
+    // README says it does. The opt-in one is the session, not the update.
+    const p = buildProviders({ appName: 'site', providers: zeroConfigProviders({ quotaSession: false }) });
+
+    expect(p.autoUpdate).toEqual(['claude', 'codex']);
   });
 });

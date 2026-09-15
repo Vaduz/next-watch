@@ -27,6 +27,62 @@ npm install --save-dev next-watch     # bun add -d next-watch works too
 
 Node 22 or later. The package is plain ESM and has one dependency (`yargs`).
 
+## Zero config
+
+In a Next.js project set up the usual way, nothing has to be written down first:
+
+```sh
+npx next-watch --start dev
+```
+
+`--start <script>` makes an npm script a server of this watch. It is started when the watch
+starts, stopped when the watch stops, restarted when a pull brings in something it serves, and
+its output goes to the pane that would otherwise show the access log. The flag is repeatable
+(`--start web --start admin`).
+
+`--build <script>` names a script that has to pass **before** a restart stops anything, which is
+the same rule the config file's own adapters are held to: a failed build leaves the running
+server alone and says so. `--start start --build build` is the production shape; `--start dev`
+needs no build.
+
+The package manager is the one the project already installs with, read from the lockfile —
+`bun.lock` (or `bun.lockb`) → bun, `pnpm-lock.yaml` → pnpm, `yarn.lock` → yarn,
+`package-lock.json` → npm, and npm where there is none.
+
+With no config file the rest is derived:
+
+- `appName` is the `name` in `package.json`, or the directory's name.
+- `root` is the working directory, `branch` is `main`, and the remote is `origin/main`.
+- A dependency change is `package.json` or the lockfile that is there.
+- Every one of the optional sections is drawn, **except `quotaSession`** — the one that starts a
+  session of its own. `--quota-session` turns that one on. See [The optional
+  sections](#the-optional-sections).
+
+`--once --dry-run --start dev` prints what would happen and spawns nothing at all.
+
+A named server is started **when the watch starts**, which only the watching run does: `--once`
+looks and leaves, so starting one there would be a side effect for no benefit. A plain `--once`
+that pulls something the server serves is the exception — the restart that follows the pull
+starts it, and the process exiting a moment later stops it again.
+
+### Where the line is
+
+Two of the defaults are blunt on purpose, and each one is a reason to write the config file:
+
+- **Nothing is blocked.** `pull.blocked` is the list of paths _this machine_ is the one that
+  writes — a database, a directory of uploads. Nothing on disk says which those are, so a
+  zero-config run blocks nothing, and a pull that brings such a file in will overwrite the copy
+  a running process holds open.
+- **Every incoming file restarts every `--start` server** (bar test files and root-level
+  documents). A flag names a script; it cannot say which paths that script's output depends on.
+  A needless restart costs the seconds a server takes to come back and a missed one is
+  invisible, so the default errs towards restarting. `restartOn` in the config file is where a
+  finer rule goes.
+
+A config file and `--start` work together: the named scripts are **added** to the servers the
+file already has, and everything else in the file — including `providers` — decides as it always
+did.
+
 ## Configure
 
 A config file, `next-watch.config.mjs` in the working directory unless `--config` says
@@ -135,28 +191,39 @@ next-watch [options]
 watch a remote branch, pull it, and restart only what needs restarting
 
 Options:
-      --version   Show version number                                  [boolean]
-      --config    path to the config file
+      --version        Show version number                             [boolean]
+      --config         path to the config file
                                      [string] [default: "next-watch.config.mjs"]
-      --interval  how often to check git (seconds)        [number] [default: 60]
-      --panel     how often to redraw the status panel (seconds, 0 to hide)
+      --interval       how often to check git (seconds)   [number] [default: 60]
+      --panel          how often to redraw the status panel (seconds, 0 to hide)
                                                          [number] [default: 600]
-      --sample    how often to poll local state (seconds)  [number] [default: 1]
-      --log       lines in the event log pane (default: as many as the terminal
-                  fits, 0 to hide)                                      [number]
-      --access    lines in each access log pane (default: auto, 0 to hide)
+      --sample         how often to poll local state (seconds)
+                                                           [number] [default: 1]
+      --log            lines in the event log pane (default: as many as the
+                       terminal fits, 0 to hide)                        [number]
+      --access         lines in each access log pane (default: auto, 0 to hide)
                                                                         [number]
-      --once      check once and exit                 [boolean] [default: false]
-      --dry-run   report what would be pulled without pulling
+      --start          run this npm script as a server (repeatable; needs no
+                       config file)                        [array] [default: []]
+      --build          npm script that must pass before a --start server is
+                       stopped for a restart                            [string]
+      --quota-session  with no config file, allow the session that opens a
+                       closed quota window            [boolean] [default: false]
+      --once           check once and exit            [boolean] [default: false]
+      --dry-run        report what would be pulled without pulling
                                                       [boolean] [default: false]
-      --restart   restart after pulling (--no-restart to pull only)
+      --restart        restart after pulling (--no-restart to pull only)
                                                        [boolean] [default: true]
-      --verbose   say more about what is happening    [boolean] [default: false]
-  -h, --help      Show help                                            [boolean]
+  -h, --help           Show help                                       [boolean]
+  -v, --verbose        say more about what is happening                [boolean]
 ```
 
 `--once --dry-run` says what would happen and changes nothing. It is the first thing to run
-against a new config.
+against a new config, and with `--start` it is also the way to see the plan without spawning
+anything.
+
+`--start`, `--build` and `--quota-session` are the flags a run with no config file needs; see
+[Zero config](#zero-config).
 
 Note that **which sections the panel draws is not a flag**. Those are `providers` switches in the
 config file, because they describe the machine rather than this particular run.
@@ -224,14 +291,21 @@ Two of them do more than read, and both are worth deciding deliberately:
   pulling a whole project's instructions into a context. It is the only switch here that spends
   anything.
 
+**With no config file, all of them are on except `quotaSession`.** There is no file to read an
+intent from, and a first run that shows an empty frame is one nobody runs twice — but starting a
+session of one's own is not something to do because nobody said otherwise, so that one waits for
+`--quota-session`. `tools` keeps the default documented above, new releases and all. A config
+file's `providers` always wins, and then the flag does nothing and says so.
+
 The agent-session section finds Codex sessions by reading `/proc`, so **that half is Linux only**;
 elsewhere those rows are simply absent and the watch carries on. tmux not being present is
 equally ordinary — it only costs those rows their restart verb.
 
 ## What leaves the machine
 
-Nothing at all until a provider is switched on. With all of them on, and never more often than
-this:
+Nothing at all until a provider is switched on — **except on a run with no config file**, where
+every section but `quotaSession` is on and this is the traffic that follows (see
+[Zero config](#zero-config)). With all of them on, and never more often than this:
 
 | Where                                                 | What for                     | How often                                                                                              | Off with          |
 | ----------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------- |

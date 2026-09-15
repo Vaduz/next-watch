@@ -66,6 +66,28 @@ export interface WatchProviders {
   sshAgent?: boolean;
 }
 
+/** The switches for a run with **no config file at all** (`--start <script>` and nothing else).
+ *
+ *  Everything is on, **except the one switch that spends something**. A config file is a
+ *  deliberate statement of what this machine wants drawn; with no file there is nothing to read
+ *  an intent from, and a watcher whose first run shows an empty frame is one nobody runs twice.
+ *  The sections that only look cost a `ps`, a read of the credentials on disk, and two status
+ *  pages a minute.
+ *
+ *  `quotaSession` is not one that only looks: it **starts a session of its own** (`claude -p`)
+ *  to open a closed five-hour window. Spending something is not a default, so it waits to be
+ *  asked for with `--quota-session`. */
+export function zeroConfigProviders(o: { quotaSession: boolean }): WatchProviders {
+  return {
+    agentSessions: true,
+    quota: true,
+    quotaSession: o.quotaSession,
+    services: true,
+    tools: true,
+    sshAgent: true,
+  };
+}
+
 /** The switches turned into the readers the loop calls. A section that is off has **no
  *  function**, which is how the panel knows not to draw it. */
 export interface ResolvedProviders {

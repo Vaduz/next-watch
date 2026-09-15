@@ -21,6 +21,15 @@ export interface Args {
   /** Rows in each access pane. Null fits it to the height. */
   access: number | null;
   verbose: boolean;
+  /** npm scripts to run as servers of this watch, in the order they were given. Empty when
+   *  none, which is every run that has a config file and nothing else. */
+  start: string[];
+  /** The script that has to pass before a `--start` server is stopped for a restart. Null when
+   *  there is none, and then a restart is only stop-then-start. */
+  build: string | null;
+  /** Whether the quota-opening session may run **on a run with no config file**. A config file
+   *  says what it wants in `providers`, and that wins. */
+  quotaSession: boolean;
 }
 
 /** The default config file, relative to the working directory. */
@@ -51,6 +60,31 @@ export interface ParseArgsOptions {
   version?: string;
 }
 
+/** The flags that say **what to run**, as opposed to how often to look at it. They are a group
+ *  of their own because they are the ones that work with no config file at all: a repository
+ *  that starts with `npm run dev` needs nothing written down to be watched.
+ *
+ *  ⚠️ `nargs: 1` on the repeatable one. Without it yargs reads a list greedily and
+ *  `--start dev --once` becomes two scripts, one of them called `--once`. */
+const SERVER_OPTIONS = {
+  start: {
+    type: 'string',
+    array: true,
+    nargs: 1,
+    default: [] as string[],
+    describe: 'run this npm script as a server (repeatable; needs no config file)',
+  },
+  build: {
+    type: 'string',
+    describe: 'npm script that must pass before a --start server is stopped for a restart',
+  },
+  'quota-session': {
+    type: 'boolean',
+    default: false,
+    describe: 'with no config file, allow the session that opens a closed quota window',
+  },
+} as const;
+
 export function parseArgs(o: ParseArgsOptions = {}, argv: readonly string[] = hideBin(process.argv)): Args {
   // The option is **not defined** rather than hidden when it is off: `strict()` then refuses
   // `--config` outright, instead of accepting it and doing nothing with it.
@@ -77,6 +111,7 @@ export function parseArgs(o: ParseArgsOptions = {}, argv: readonly string[] = hi
       describe: 'lines in the event log pane (default: as many as the terminal fits, 0 to hide)',
     })
     .option('access', { type: 'number', describe: 'lines in each access log pane (default: auto, 0 to hide)' })
+    .options(SERVER_OPTIONS)
     .option('once', { type: 'boolean', default: false, describe: 'check once and exit' })
     .option('dry-run', { type: 'boolean', default: false, describe: 'report what would be pulled without pulling' })
     .option('restart', {
@@ -85,6 +120,12 @@ export function parseArgs(o: ParseArgsOptions = {}, argv: readonly string[] = hi
       describe: 'restart after pulling (--no-restart to pull only)',
     })
     .option('verbose', { type: 'boolean', default: false, describe: 'say more about what is happening' })
+    // ⚠️ **Refused rather than reduced.** yargs collects a repeated option into an array, and
+    // the reading below would then find no string and report no build script at all — a
+    // `--start start --build build --build other` would restart without building, which is the
+    // one rule this whole feature is held to. Measured against yargs 18: `build` came back
+    // `['build', 'other']` and the run went on silently.
+    .check(a => (Array.isArray(a.build) ? '--build takes one script, and it applies to every --start server' : true))
     // The keys are documented in `--help` with the same wording the screen's own `help` uses,
     // so the two cannot say different things.
     .epilogue(`In a terminal:\n  ${helpLines().join('\n  ')}`)
@@ -101,5 +142,7 @@ export function parseArgs(o: ParseArgsOptions = {}, argv: readonly string[] = hi
     log: a.log ?? null,
     // yargs widens the type of an option with no default, so this is checked here.
     access: typeof a.access === 'number' ? a.access : null,
+    start: Array.isArray(a.start) ? a.start.map(String) : [],
+    build: typeof a.build === 'string' ? a.build : null,
   };
 }

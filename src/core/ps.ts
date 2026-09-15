@@ -62,6 +62,33 @@ export function parseProcStartTicks(stat: string): string | null {
   return ticks !== undefined && /^\d+$/.test(ticks) ? ticks : null;
 }
 
+/** A pid **and everything below it**, parents before their children.
+ *
+ *  ⚠️ This is what stopping a spawned server means. `npm run dev` is the parent of the process
+ *  that actually listens (`next dev`), so signalling only the pid that was spawned leaves the
+ *  grandchild holding the port, and the next start fails on an address already in use.
+ *
+ *  The pid itself is always the first element, even when the snapshot knows nothing about it:
+ *  a `ps` that could not be read must not turn stopping one process into stopping none.
+ *
+ *  As in `ancestorChain`, `seen` guards against a cycle — the snapshot can be internally
+ *  inconsistent when processes exit between rows. */
+export function processTree(procs: readonly ProcInfo[], pid: number): number[] {
+  const children = new Map<number, number[]>();
+  for (const p of procs) children.set(p.ppid, [...(children.get(p.ppid) ?? []), p.pid]);
+  const out: number[] = [];
+  const seen = new Set<number>();
+  const queue = [pid];
+  while (queue.length > 0) {
+    const cur = queue.shift();
+    if (cur === undefined || cur <= 0 || seen.has(cur)) continue;
+    seen.add(cur);
+    out.push(cur);
+    queue.push(...(children.get(cur) ?? []));
+  }
+  return out;
+}
+
 /** A pid and its ancestors up to the root, starting with the pid itself.
  *
  *  The `seen` set guards against a cycle: `ppid` comes from a snapshot that can be internally

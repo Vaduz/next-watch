@@ -1,5 +1,46 @@
 # Changelog
 
+## Unreleased
+
+- **`--start <script>` runs a server with no config file at all.** `npx next-watch --start dev`
+  in a Next.js project set up the usual way now watches, serves and restarts without a line
+  written down. Until this, watching a single project meant a four-function adapter
+  (`start` / `stop` / `probe` / `restart`), and all four follow from the script name:
+
+  - `start` spawns `<pm> run <script>`, where `<pm>` is read from the lockfile (`bun.lock` and
+    `bun.lockb` → bun, `pnpm-lock.yaml` → pnpm, `yarn.lock` → yarn, `package-lock.json` → npm,
+    and npm where there is none). The flag is repeatable.
+  - `stop` signals **the whole process tree**. `npm run dev` is the parent of the process that
+    holds the port, so signalling only the pid that was spawned leaves the grandchild listening
+    and the next start fails on an address already in use.
+  - `probe` is whether that child is still there. The address comes from the child's own output
+    (`- Local: http://localhost:3000`, and Next 12's `url:` line); a server that prints none is
+    still reported up, with `-` for the address rather than a guess.
+  - `restartOn` is `restartUnless([])` — everything except test files and root documents. A
+    flag names a script and cannot say which paths its output depends on; a needless restart
+    costs seconds and a missed one is invisible.
+
+  The child's stdout and stderr are written to `<logDir>/<script>.txt`, so the existing
+  access-log pane reads them with no change. `--build <script>` puts a build in front of the
+  restart, with the rule the config file's own adapters are held to: **a failed build leaves
+  the running server alone**.
+
+  A config file and `--start` work together — the named scripts are appended to the file's own
+  `servers`, and an id that is already taken is refused rather than silently doubled.
+
+- **With no config file, every optional section is drawn except `quotaSession`.** There is
+  nothing to read an intent from, and a first run showing an empty frame is one nobody runs
+  twice. `quotaSession` is the switch that **starts a session of its own** to open a closed
+  five-hour window, so it waits to be asked for with the new `--quota-session`. `tools` keeps
+  its documented default. A config file's `providers` still wins over all of it.
+
+- Servers named by `--start` are started when the watch starts and stopped when it exits, and
+  **only on the watching path**: `--once` looks and leaves, and `--dry-run` is the promise that
+  the run changes nothing, so neither spawns anything.
+
+- `Args` has three new fields (`start`, `build`, `quotaSession`). A host that builds an `Args`
+  by hand rather than through `parseArgs` has to add them; nothing else changed for embedders.
+
 ## 0.1.6
 
 - **`--version` reported the wrong number when next-watch was installed as a dependency**, which
