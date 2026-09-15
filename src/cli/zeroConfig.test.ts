@@ -39,6 +39,14 @@ const CONFIG_FILE = `export default {
 };
 `;
 
+/** A config file whose server is described rather than written out. */
+const SCRIPT_CONFIG_FILE = `export default {
+  appName: 'described',
+  pull: { blocked: [] },
+  servers: [{ id: 'web', script: 'dev:web' }],
+};
+`;
+
 describe('configFor, with no config file', () => {
   it('derives everything it needs from the directory', async () => {
     const dir = project({ 'package.json': '{"name":"@acme/site"}', 'bun.lock': '' });
@@ -85,15 +93,22 @@ describe('configFor, with no config file', () => {
     expect((await run(['--start', 'web', '--start', 'admin'])).servers.map(s => s.id)).toEqual(['web', 'admin']);
   });
 
-  it('builds the adapters without starting anything', async () => {
+  it('describes the server rather than building it, and spawns nothing', async () => {
     project({ 'package.json': '{"name":"site"}' });
 
     const config = await run(['--start', 'dev']);
-    const row = await config.servers[0].probe();
 
-    // `--once --dry-run --start dev` rests on this: assembling a run spawns nothing, and a
-    // probe of a server that was never started reads as down rather than starting it.
-    expect(row.state).toBe('down');
+    // `--start dev` is exactly the entry a config file could have written by hand. Nothing is
+    // spawned by assembling a run — `--once --dry-run --start dev` rests on that.
+    expect(config.servers).toEqual([{ id: 'dev', script: 'dev', build: undefined }]);
+  });
+
+  it('gives --build to the servers named on the command line', async () => {
+    project({ 'package.json': '{"name":"site"}' });
+
+    expect((await run(['--start', 'start', '--build', 'build'])).servers).toEqual([
+      { id: 'start', script: 'start', build: 'build' },
+    ]);
   });
 });
 
@@ -115,6 +130,19 @@ describe('configFor, with a config file', () => {
     project({ 'package.json': '{"name":"site"}', 'next-watch.config.mjs': CONFIG_FILE });
 
     expect((await run([])).servers.map(s => s.id)).toEqual(['web']);
+  });
+
+  // ⚠️ `--build` is the command line's own. A file's entries carry their own `build`, and a flag
+  // that quietly built for them would change what the file says without the file changing.
+  it('does not give --build to the servers the file declared', async () => {
+    project({ 'package.json': '{"name":"site"}', 'next-watch.config.mjs': SCRIPT_CONFIG_FILE });
+
+    const servers = (await run(['--start', 'dev', '--build', 'build'])).servers;
+
+    expect(servers).toEqual([
+      { id: 'web', script: 'dev:web' },
+      { id: 'dev', script: 'dev', build: 'build' },
+    ]);
   });
 });
 

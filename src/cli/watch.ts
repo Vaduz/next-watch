@@ -54,6 +54,8 @@ import { WatchScreen } from './screen.js';
 import { assertWatchable, repoState, tick, type RunCommand } from './tick.js';
 import { wireTerminal } from './terminal.js';
 import { appendWatchEvent, loadWatchLog } from '../io/watchLogFile.js';
+import { packageManagerAt } from '../io/packageManager.js';
+import { withAdapters } from './scriptServer.js';
 import { resolveConfig, type NextWatchConfig, type ResolvedConfig, type WatchServerAdapter } from '../config.js';
 import path from 'node:path';
 
@@ -96,26 +98,47 @@ function drawer(config: ResolvedConfig, state: WatchState, screen: WatchScreen, 
   };
 }
 
-/** Start the servers named by `--start`, which is what makes a run with no config file serve
- *  anything at all.
+/** Turn every described server into an adapter, which is the only shape the loop knows.
+ *
+ *  It happens here rather than in `resolveConfig` because it spawns children and streams their
+ *  output, and because **`startWatch` is the door every run comes through** — the command line,
+ *  and a host that builds its config in code. Doing it anywhere later would leave one of those
+ *  two with servers the screen never draws.
+ *
+ *  The paths are resolved the same way `resolveConfig` resolves them, because the adapters need
+ *  them before the config is resolved. */
+function resolveScriptServers(input: NextWatchConfig): NextWatchConfig {
+  const root = input.root ?? process.cwd();
+  return withAdapters(input, {
+    manager: packageManagerAt(root).manager,
+    root,
+    logDir: path.resolve(root, input.logDir ?? 'log'),
+  });
+}
+
+/** Start the servers the watcher owns, which is what makes `--start dev` — and a described
+ *  server in a config file — serve anything at all.
+ *
+ *  Which ones those are is the adapter's own answer (`autostart`), not a list of flags: a
+ *  described entry in a config file and a `--start` on the command line are the same thing by
+ *  the time they get here, and an adapter written by hand says nothing, because whether its
+ *  server is already running is the repository's business.
  *
  *  ⚠️ **Only on the watching path.** `--once` looks and leaves, so a server started there would
  *  be stopped a second later by the process exiting — a side effect for no benefit. `--dry-run`
  *  is the promise that this run changes nothing, and spawning a server changes something. Both
- *  are checked here rather than at the call site so the reason stays next to the rule.
- *
- *  Servers from the config file are **not** touched: whether they are already running is the
- *  repository's business, and this watcher has never started them. */
-async function startNamedServers(
+ *  are checked here rather than at the call site so the reason stays next to the rule. */
+async function startOwnServers(
   args: Args,
   servers: ReadonlyMap<string, WatchServerAdapter>,
   emit: Emit,
 ): Promise<void> {
+  const mine = [...servers.values()].filter(s => s.autostart === true);
   if (args.dryRun) {
-    if (args.start.length > 0) emit('info', `(dry-run) would start ${args.start.join(', ')}`, 'dim');
+    if (mine.length > 0) emit('info', `(dry-run) would start ${mine.map(s => s.id).join(', ')}`, 'dim');
     return;
   }
-  for (const id of args.start) await servers.get(id)?.start(emit);
+  for (const server of mine) await server.start(emit);
 }
 
 /** Record the start and the stop as events. The pane resumes from the previous watch, so
@@ -196,7 +219,7 @@ function banner(screen: WatchScreen, config: ResolvedConfig, head: string, args:
 /** Start watching. Returns an exit code; with `--once` it returns after one pass, and
  *  otherwise it only returns when the watch is stopped. */
 export async function startWatch(input: NextWatchConfig, args: Args): Promise<number> {
-  const config = resolveConfig(input);
+  const config = resolveConfig(resolveScriptServers(input));
   assertWatchable(config.root, config.branch);
   const screen = openScreen(config);
   if (args.once) return once(config, args, screen);
@@ -228,7 +251,7 @@ export async function startWatch(input: NextWatchConfig, args: Args): Promise<nu
     refreshSsh: () => reportSshAgentChanges(config, state, screen),
   });
   await firstScreen(config, state, screen, args, keys);
-  await startNamedServers(args, servers, emit);
+  await startOwnServers(args, servers, emit);
   const run: RunCommand = o => streamCommand({ ...o, timeoutMs: 10 * 60_000, emit });
   // Deliberately endless. It stops on Ctrl-C or a typed `quit`, from the person at this
   // terminal.

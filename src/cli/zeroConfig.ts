@@ -18,13 +18,8 @@ import { packageManagerAt } from '../io/packageManager.js';
 import type { PackageManagerChoice } from '../core/packageManager.js';
 import { zeroConfigProviders } from '../io/providers.js';
 import { loadConfig } from './load.js';
-import { scriptServers } from './scriptServer.js';
 import type { Args } from './args.js';
 import type { NextWatchConfig } from '../config.js';
-
-/** The default log directory, matching `resolveConfig`. It is repeated rather than imported
- *  because the servers need the resolved path **before** the config is resolved. */
-const DEFAULT_LOG_DIR = 'log';
 
 /** What the directory itself says: which manager installs here, and what to call the watcher. */
 function projectShape(root: string): { choice: PackageManagerChoice; appName: string } {
@@ -99,14 +94,10 @@ export async function configFor(args: Args): Promise<NextWatchConfig> {
   }
   const base = await baseConfig(args);
   if (args.start.length === 0) return base;
-  const root = base.root ?? process.cwd();
-  const servers = scriptServers({
-    scripts: args.start,
-    build: args.build,
-    manager: packageManagerAt(root).manager,
-    root,
-    logDir: path.resolve(root, base.logDir ?? DEFAULT_LOG_DIR),
-  });
+  // ⚠️ `--build` belongs to the servers named on the command line and to no others. A config
+  // file's own entries carry their own `build`, and a flag quietly building for them would
+  // change what a file says without the file changing.
+  const servers = args.start.map(script => ({ id: script, script, build: args.build ?? undefined }));
   // ⚠️ Two servers with one id cannot both be the pane called `dev`, the target the cursor
   // lands on, or the entry the plan restarts. Refusing is the only answer that does not pick
   // one of them silently.

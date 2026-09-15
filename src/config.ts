@@ -38,6 +38,68 @@ export interface WatchServerAdapter {
   restart: (emit: Emit) => Promise<boolean>;
   stop: (emit: Emit) => Promise<boolean>;
   start: (emit: Emit) => Promise<boolean>;
+  /** The steps `restart` will take, in order, for `--dry-run` to print without running them.
+   *  Omitted means the dry run says only that this server would restart, which is all it could
+   *  honestly say about a function it cannot look inside. */
+  describeRestart?: () => readonly string[];
+  /** Whether the watch **starts this server when it starts**.
+   *
+   *  A described server sets it, because the watcher is the only thing that could start it: it
+   *  spawns the child itself, so a described server nobody started is a row saying `down` for
+   *  ever. An adapter written by hand leaves it out, because whether its server is already
+   *  running — under systemd, in another terminal, since last week — is the repository's
+   *  business and not something to decide on its behalf.
+   *
+   *  ⚠️ Never on `--once` or `--dry-run`: one looks and leaves, and the other promises that the
+   *  run changes nothing. */
+  autostart?: boolean;
+}
+
+/** One server **described rather than written**: an npm script, and the handful of decisions
+ *  that surround running one.
+ *
+ *  Everything `WatchServerAdapter` asks for can be derived from a script name — that is what
+ *  `--start` on the command line already does — and the fields below are the ones a repository
+ *  cannot derive: what to build first, what to prepare before each start, and which incoming
+ *  paths call for a restart. A repository that needs more than these writes an adapter; the two
+ *  forms may be mixed in one `servers` array.
+ *
+ *  `{ id: 'dev', script: 'dev' }` is exactly what `--start dev` builds. */
+export interface ScriptServerEntry {
+  /** The id used as the key everywhere: the pane name, the target key, the plan's `restart`. */
+  id: string;
+  /** The npm script to run, as `<pm> run <script>`. The package manager is read from the
+   *  lockfile in the checkout. */
+  script: string;
+  /** What to call it on screen. Defaults to the id. */
+  label?: string;
+  /** A script to run **before anything is stopped**. A build that fails leaves the running
+   *  server alone and says so, which is the rule every adapter here is held to. */
+  build?: string;
+  /** What to prepare before **every** start, including the one inside a restart: an npm script
+   *  name, or a function.
+   *
+   *  ⚠️ It runs **before the stop**, so the old server is still serving while it works. That is
+   *  what keeps a restart from adding a gap — and it means that if the preparation rewrites
+   *  something the running server reads, judging that effect is the repository's own business.
+   *
+   *  A failure leaves the old server running, exactly as a failed build does. */
+  preStart?: string | ((emit: Emit) => Promise<void>);
+  /** Restart **only** when an incoming path starts with one of these. Prefixes, so `web/`
+   *  covers that tree and a whole file name works too. */
+  restartPaths?: readonly string[];
+  /** Restart for **anything except** these prefixes (and test-only files, and root-level
+   *  documents). The opposite shape of `restartPaths`; giving both is an error. */
+  ignorePaths?: readonly string[];
+}
+
+/** What `servers` accepts: a described server, or one written out in full. */
+export type WatchServerSpec = WatchServerAdapter | ScriptServerEntry;
+
+/** Whether a `servers` entry is the described form. **Having `script` is what decides it** —
+ *  the same test `loadConfig` uses, so the type guard and the validation cannot disagree. */
+export function isScriptServer(spec: WatchServerSpec): spec is ScriptServerEntry {
+  return typeof (spec as ScriptServerEntry).script === 'string';
 }
 
 export interface NextWatchConfig {
@@ -59,8 +121,9 @@ export interface NextWatchConfig {
   timezoneOffsetMinutes?: number;
   /** What must never arrive from the remote, and what counts as a dependency change. */
   pull: PullPolicy;
-  /** The servers, in the order they appear on screen. */
-  servers: WatchServerAdapter[];
+  /** The servers, in the order they appear on screen. Each one is either described
+   *  (`ScriptServerEntry`) or written out (`WatchServerAdapter`); the two may be mixed. */
+  servers: WatchServerSpec[];
   /** The tasks running outside the watcher. Omitted means the section is not drawn. */
   tasks?: () => TaskRow[];
   /** Commands to run **after a pull that brought something in**, in this order, once the
@@ -92,6 +155,19 @@ export interface ResolvedConfig {
  *  other way of writing an offset (it returns -540 in Japan, which is UTC+9). */
 const localOffsetMinutes = (): number => -new Date().getTimezoneOffset();
 
+/** The loop only ever sees adapters, so a described server has to have become one first.
+ *
+ *  Turning a script into an adapter means spawning children and streaming their output, which
+ *  belongs to the composition root and not here — `startWatch` does it on the way in. This only
+ *  says so when something skipped that step, because a server silently missing from the screen
+ *  is the worst way to find out. */
+function alreadyAnAdapter(spec: WatchServerSpec): WatchServerAdapter {
+  if (!isScriptServer(spec)) return spec;
+  throw new Error(
+    `server ${spec.id}: a described server is turned into an adapter by startWatch, not by resolveConfig`,
+  );
+}
+
 export function resolveConfig(config: NextWatchConfig): ResolvedConfig {
   const root = config.root ?? process.cwd();
   const branch = config.branch ?? 'main';
@@ -103,7 +179,7 @@ export function resolveConfig(config: NextWatchConfig): ResolvedConfig {
     logDir: config.logDir ?? 'log',
     timezoneOffsetMinutes: config.timezoneOffsetMinutes ?? localOffsetMinutes(),
     pull: config.pull,
-    servers: config.servers,
+    servers: config.servers.map(alreadyAnAdapter),
     tasks: config.tasks ?? ((): TaskRow[] => []),
     afterPull: config.afterPull ?? [],
     providers: buildProviders({ appName: config.appName, providers: config.providers ?? {} }),

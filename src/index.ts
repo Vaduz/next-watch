@@ -16,11 +16,14 @@ export type {
   ResolvedProviders,
   ServiceSpec,
   ToolSpec,
+  ScriptServerEntry,
   WatchProviders,
   WatchServerAdapter,
+  WatchServerSpec,
 } from './config.js';
 export {
   restartIfAny,
+  restartIfPrefixed,
   restartUnless,
   runIfAny,
   type AfterPullHook,

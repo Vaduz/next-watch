@@ -50,6 +50,7 @@ export {
   hooksToRun,
   planFromIncoming,
   restartIfAny,
+  restartIfPrefixed,
   restartUnless,
   runIfAny,
   type AfterPullHook,

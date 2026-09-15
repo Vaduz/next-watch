@@ -82,6 +82,21 @@ export function restartIfAny(paths: readonly string[]): (incoming: readonly stri
  *  that only rewrites a crontab would describe itself wrongly. */
 export const runIfAny = restartIfAny;
 
+/**
+ * A server that restarts **only for** paths under one of the given prefixes.
+ *
+ * The prefix twin of `restartIfAny`, and what a declarative `restartPaths: ['web/', 'lib/']`
+ * means. A list written by hand names directories far more often than files, and `restartIfAny`
+ * compares whole paths — `'web/'` there would match nothing at all, silently, which is the
+ * failure that is invisible. A whole file name still works, because a path is its own prefix.
+ *
+ * ⚠️ **No test-only or root-document exclusion here**, unlike `restartUnless`. This list says
+ * what *does* matter; something that landed in it deserves to be taken at its word.
+ */
+export function restartIfPrefixed(prefixes: readonly string[]): (paths: readonly string[]) => boolean {
+  return paths => paths.some(p => startsWithAny(p, prefixes));
+}
+
 /** A command to run **after a pull that brought something in**.
  *
  *  The servers restart because files they serve changed; this is for the rest of what a

@@ -161,24 +161,33 @@ You do not need a config file to start. You need one when:
 - some incoming paths must **never** be pulled, because this machine is the one that writes them;
 - a server needs a **finer restart rule** than "anything that is not a test file or a root-level
   document";
-- there is more than one server, or one whose restart has to build in a way `--build` cannot
-  express;
+- there is more than one server, or one that has to prepare something before it starts, or one
+  that should go on running after the watch is closed;
+- there is a command to run after a pull that no server covers;
 - you want to choose which of the sections above are drawn.
 
 It is `next-watch.config.mjs` in the working directory unless `--config` says otherwise, and it is
-a module rather than JSON because the interesting parts are code: which incoming paths mean a
-given server has to restart is a predicate, not a list.
+a module rather than JSON because the interesting parts can be code — a predicate over paths, a
+function that prepares something — though most servers need none of that.
+
+**A server is either described or written out.** Describing one is naming its npm script and the
+handful of decisions around it; `{ id: 'dev', script: 'dev' }` is exactly what `--start dev`
+builds, and a described server **is started when the watch starts**, because next-watch spawns
+that child itself. Writing one out is supplying the four functions yourself, for a repository
+whose starting and stopping are its own business — those are left alone at startup, since whether
+such a server is already running is not something to decide on its behalf. The two forms may be
+mixed in one `servers` array.
 
 Everything optional below is commented out, with what turning it on gives you:
 
 ```js
 import { restartUnless } from 'next-watch/core';
 
-// Your own functions. next-watch never looks inside them — it only decides when to call which.
-// Replace these four with whatever starting, stopping, building and probing mean here.
-const startWeb = async emit => true;
-const stopWeb = async emit => true;
-const buildWeb = async () => true;
+// Your own functions, for the server that is written out below. next-watch never looks inside
+// them — it only decides when to call which. Replace these four.
+const startAdmin = async emit => true;
+const stopAdmin = async emit => true;
+const buildAdmin = async () => true;
 const isListening = async port => true;
 
 export default {
@@ -206,40 +215,51 @@ export default {
   },
 
   servers: [
+    // Described: an npm script, and the decisions around running one.
     {
       id: 'web',
+      script: 'dev', // `<pm> run dev` — exactly what `--start dev` builds
+      // build: 'build',            // runs first; a build that fails leaves the old server serving
+      // preStart: 'prepare:web',   // an npm script, or async emit => {}; before every start
+      // restartPaths: ['web/', 'lib/', 'package.json'],  // restart only for these prefixes
+      // ignorePaths: ['docs/'],    // or the opposite: restart for anything except these
+      // label: 'the site',         // what the row is called on screen; the id by default
+    },
+
+    // Written out: for a server whose starting and stopping are its own business. Mixing the two
+    // forms in one array is ordinary — describe what can be described, write out the rest.
+    {
+      id: 'admin',
       // `restartUnless(prefixes)` restarts for anything **except** those prefixes (and test files,
       // and root-level documents). `restartIfAny(paths)` is the opposite shape, for a dev server
       // that reloads itself and needs a restart only for its own configuration.
-      restartOn: restartUnless(['docs/', 'admin/']),
+      restartOn: restartUnless(['docs/', 'web/']),
       probe: async () => ({
-        server: 'web',
-        state: (await isListening(3000)) ? 'up' : 'down',
-        url: 'http://localhost:3000',
+        server: 'admin',
+        state: (await isListening(3001)) ? 'up' : 'down',
+        url: 'http://localhost:3001',
         mode: 'dev',
         owner: 'me',
         uptimeSeconds: null,
         // The files this server's stdout collects in. The access pane reads their tail.
-        logFiles: ['log/web.txt'],
+        logFiles: ['log/admin.txt'],
       }),
       // ⚠️ Build before stopping anything. Stopping first and then finding the build broken leaves
       // nothing running, which is worse than the old code still serving. Only the adapter knows
-      // what building means, so only the adapter can get this right.
+      // what building means, so only the adapter can get this right — a described server gets the
+      // same order for free.
       restart: async emit => {
         emit('step', 'building ...');
-        if (!(await buildWeb())) {
+        if (!(await buildAdmin())) {
           emit('error', 'build failed, leaving the old server up');
           return false;
         }
-        await stopWeb(emit);
-        return startWeb(emit);
+        await stopAdmin(emit);
+        return startAdmin(emit);
       },
-      stop: emit => stopWeb(emit),
-      start: emit => startWeb(emit),
+      stop: emit => stopAdmin(emit),
+      start: emit => startAdmin(emit),
     },
-    // A second server is another entry with the same five fields, and gets its own row, its own
-    // log pane and its own restart rule. `restartIfAny(['admin/next.config.mjs'])` is the shape
-    // for one that reloads itself and only needs restarting for its own configuration.
   ],
 
   // Work started outside the watcher, shown as its own section with a kill verb on each row.
@@ -281,7 +301,14 @@ bunx next-watch
 
 A config file and `--start` work together: the scripts named on the command line are **added** to
 the file's own `servers`, and an id that is already taken is refused rather than silently doubled.
+`--build` belongs to the servers named on the command line — a described entry carries its own.
 `providers` in the file always wins over what a flag would have switched on.
+
+Two things a repository often reaches for are already above and need nothing new: `pull.blocked`
+is where paths that must never arrive go, and `afterPull` is where a command that has to run once
+a pull has landed goes. `--once --dry-run` prints what a pull would bring, which servers would
+restart, and — for a described server — the steps each restart would take, without running any of
+them.
 
 The agent-session section finds Codex sessions by reading `/proc`, so **that half is Linux only**;
 elsewhere those rows are simply absent and the watch carries on. tmux not being present is equally

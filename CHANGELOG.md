@@ -2,6 +2,41 @@
 
 ## Unreleased
 
+- **A server can be described in the config file instead of written out.** `servers` now takes
+  `{ id, script, build?, preStart?, restartPaths? | ignorePaths?, label? }` beside the adapter
+  form, and the two mix freely in one array. `{ id: 'dev', script: 'dev' }` is exactly what
+  `--start dev` builds, so a repository that had to supply four functions to watch an ordinary
+  `npm run dev` now supplies a line.
+
+  - `build` runs before anything is stopped, and a build that fails leaves the running server
+    serving — the rule every adapter here is held to, now had for free.
+  - `preStart` prepares something before **every** start, as an npm script name or an
+    `async (emit) => {}`. It runs **before the stop**, so the old server is still serving while it
+    works and a restart adds no gap; a failure leaves that old server running, exactly as a failed
+    build does.
+  - `restartPaths` restarts only for paths under one of the given prefixes (`web/` covers that
+    tree, and a whole file name works too). `ignorePaths` is the opposite: everything except
+    those. Giving both is refused, because together they say nothing. Giving neither keeps what
+    `--start` has always done.
+
+  A config file with a server that has both `script` and `start`, or both path lists, or no id, is
+  now refused by name rather than half-resolved.
+
+  `--dry-run` now prints the steps each restart would take, rather than only that it would happen:
+  `web: build (build) → preStart (prepare) → stop → start (dev)`. That is the new optional
+  `describeRestart?` on `WatchServerAdapter`, which adapters written by hand leave out, because a
+  function cannot be looked inside. `restartIfPrefixed` is exported from `next-watch/core` beside
+  `restartUnless`.
+
+  `--build` on the command line still belongs to the servers named with `--start`; a described
+  entry carries its own.
+
+  **A described server is started when the watch starts**, exactly as a `--start` one is — the
+  watcher spawns that child itself, so nothing else was ever going to. An adapter written by hand
+  is still left alone, because whether its server is already running (under systemd, in another
+  terminal, since last week) is the repository's business; it can ask by setting the new
+  `autostart` on the adapter. Neither is started under `--once` or `--dry-run`.
+
 - docs: README reorganized around what a reader does rather than how the package is built.
   Install and start come first (bun, with npm on the next line), then one section saying what the
   screen shows and what can be done to the thing under the cursor, then the config file, and only

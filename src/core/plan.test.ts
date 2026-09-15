@@ -8,6 +8,7 @@ import {
   hooksToRun,
   planFromIncoming,
   restartIfAny,
+  restartIfPrefixed,
   restartUnless,
   runIfAny,
   type AfterPullHook,
@@ -188,6 +189,42 @@ describe('restartIfAny', () => {
     expect(rule(['web/next.config.ts'])).toBe(true);
     expect(rule(['web/next.config.ts.bak'])).toBe(false);
     expect(rule(['web/app/page.tsx'])).toBe(false);
+  });
+});
+
+// What a declarative `restartPaths: ['web/', 'lib/', 'package.json']` means. The difference from
+// `restartIfAny` is the whole reason it exists: a hand-written list names directories far more
+// often than files, and comparing whole paths would match none of them — silently.
+describe('restartIfPrefixed', () => {
+  const rule = restartIfPrefixed(['web/', 'lib/', 'package.json']);
+
+  const cases: [name: string, paths: string[], restarts: boolean][] = [
+    ['a file under a listed directory', ['web/app/page.tsx'], true],
+    ['a file directly in one', ['lib/a.ts'], true],
+    ['a whole file name, which is its own prefix', ['package.json'], true],
+    ['one match among several paths is enough', ['docs/x.md', 'lib/a.ts'], true],
+    ['nothing listed', ['docs/x.md', 'admin/a.ts'], false],
+    ['no changes at all', [], false],
+    // The prefix is text, not a path segment. A trailing slash is what confines `lib/` to that
+    // directory — and a prefix without one reaches further than a reader may expect, which is
+    // the trade the two rows below record.
+    ['a sibling directory whose name merely starts the same', ['libs/other.ts'], false],
+    ['a file whose name merely starts the same as a listed one', ['package.json.bak'], true],
+    ['a listed name deeper down is not a prefix', ['app/package.json'], false],
+    // Unlike `restartUnless`, nothing is exempt here: a list that says what matters is taken at
+    // its word.
+    ['a test file under a listed directory still counts', ['lib/a.test.ts'], true],
+    ['a document under a listed directory still counts', ['web/notes.md'], true],
+  ];
+
+  for (const [name, paths, restarts] of cases) {
+    it(name, () => {
+      expect(rule(paths)).toBe(restarts);
+    });
+  }
+
+  it('an empty list restarts for nothing', () => {
+    expect(restartIfPrefixed([])(['anything.ts'])).toBe(false);
   });
 });
 

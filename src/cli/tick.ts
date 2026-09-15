@@ -245,4 +245,21 @@ function reportDryRun(incoming: Incoming, plan: WatchPlan, config: ResolvedConfi
   const shown = incoming.paths.slice(0, MAX_PATHS_SHOWN);
   const rest = incoming.paths.length - shown.length;
   for (const line of [...shown, ...(rest > 0 ? [`... ${rest} more file(s)`] : [])]) screen.detail(line);
+  for (const line of restartSteps(config, plan)) screen.detail(line);
+}
+
+/** What each restart would actually do, for the servers that can say.
+ *
+ *  A plan saying `restart web` does not tell anybody whether that means building first, or
+ *  preparing something, or only stopping and starting — and a dry run exists precisely to be
+ *  read before trusting the real one. An adapter written by hand says nothing here, because a
+ *  function cannot be looked inside. */
+function restartSteps(config: ResolvedConfig, plan: WatchPlan): string[] {
+  const byId = new Map(config.servers.map(s => [s.id, s]));
+  const out: string[] = [];
+  for (const id of plan.restart) {
+    const steps = byId.get(id)?.describeRestart?.() ?? [];
+    if (steps.length > 0) out.push(`${id}: ${steps.join(' → ')}`);
+  }
+  return out;
 }
