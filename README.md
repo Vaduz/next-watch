@@ -180,34 +180,36 @@ Everything optional below is commented out, with what turning it on gives you:
 ```js
 import { restartUnless } from 'next-watch/core';
 
-// Your own functions, for the server that is written out below. next-watch never looks inside
-// them — it only decides when to call which. Replace these four.
+// Your own functions, for the server that is written out below. next-watch
+// never looks inside them — it only decides when to call which. Replace these.
 const startAdmin = async emit => true;
 const stopAdmin = async emit => true;
 const buildAdmin = async () => true;
 const isListening = async port => true;
 
 export default {
-  // Names the cache and sandbox directories, and identifies this watcher to anything it talks to.
+  // Names the cache and sandbox directories, and identifies this watcher to
+  // anything it talks to.
   appName: 'my-site',
 
-  // root: import.meta.dirname,   // watch a checkout other than the working directory
-  // branch: 'main',              // the only branch it will merge into; it refuses to run on another
+  // root: import.meta.dirname,   // a checkout other than the working directory
+  // branch: 'main',              // the only branch it will merge into
   // remote: 'origin/main',       // watch a different remote branch
-  // logDir: 'log',               // where the event log and the access-log positions are kept
-  // timezoneOffsetMinutes: 540,  // pin every clock on screen; the default is this machine's offset
+  // logDir: 'log',               // where the event log and pane positions live
+  // timezoneOffsetMinutes: 540,  // pin the clocks; default: this machine's
 
   pull: {
-    // ⚠️ What this checkout is the one that writes. Receiving such a file means something else
-    // wrote it, and letting git overwrite a file a running process holds open is not a conflict,
-    // it is destruction. Anything listed here stops the pull and asks for a person.
+    // ⚠️ What this checkout is the one that writes. Receiving such a file means
+    // something else wrote it, and letting git overwrite a file a running
+    // process holds open is not a conflict, it is destruction. Anything listed
+    // here stops the pull and asks for a person.
     blocked: [
       // { prefix: 'db/', reason: 'this machine owns the database' },
       // { prefix: 'log/', reason: 'written by the servers running here' },
     ],
-    // Receiving one of these means the dependencies moved, so `<pm> install` runs before anything
-    // is restarted. Without it, a pull that changes package.json restarts servers onto old
-    // dependencies.
+    // Receiving one of these means the dependencies moved, so `<pm> install`
+    // runs before anything is restarted. Without it, a pull that changes
+    // package.json restarts servers onto old dependencies.
     // dependencyPaths: ['package.json', 'bun.lock'],
   },
 
@@ -216,21 +218,23 @@ export default {
     {
       id: 'web',
       script: 'dev', // `<pm> run dev` — exactly what `--start dev` builds
-      // build: 'build',            // runs first; a build that fails leaves the old server serving
-      // preStart: 'prepare:web',   // an npm script, or async emit => {}; before every start
-      // detached: true,            // goes on running after the watch closes; the next one adopts it
-      // restartPaths: ['web/', 'lib/', 'package.json'],  // restart only for these prefixes
-      // ignorePaths: ['docs/'],    // or the opposite: restart for anything except these
-      // label: 'the site',         // what the row is called on screen; the id by default
+      // build: 'build',           // runs first; if it fails, nothing stops
+      // preStart: 'prepare:web',  // a script, or async emit => {}, first
+      // detached: true,           // outlives the watch; the next one adopts it
+      // restartPaths: ['web/', 'lib/'],  // restart only for these prefixes
+      // ignorePaths: ['docs/'],   // or the opposite: anything except these
+      // label: 'the site',        // the row's name; the id by default
     },
 
-    // Written out: for a server whose starting and stopping are its own business. Mixing the two
-    // forms in one array is ordinary — describe what can be described, write out the rest.
+    // Written out: for a server whose starting and stopping are its own
+    // business. Mixing the two forms in one array is ordinary — describe what
+    // can be described, write out the rest.
     {
       id: 'admin',
-      // `restartUnless(prefixes)` restarts for anything **except** those prefixes (and test files,
-      // and root-level documents). `restartIfAny(paths)` is the opposite shape, for a dev server
-      // that reloads itself and needs a restart only for its own configuration.
+      // `restartUnless(prefixes)` restarts for anything **except** those
+      // prefixes (and test files, and root-level documents). `restartIfAny`
+      // is the opposite shape, for a dev server that reloads itself and needs
+      // a restart only for its own configuration.
       restartOn: restartUnless(['docs/', 'web/']),
       probe: async () => ({
         server: 'admin',
@@ -239,13 +243,15 @@ export default {
         mode: 'dev',
         owner: 'me',
         uptimeSeconds: null,
-        // The files this server's stdout collects in. The access pane reads their tail.
+        // The files this server's stdout collects in. The access pane reads
+        // their tail.
         logFiles: ['log/admin.txt'],
       }),
-      // ⚠️ Build before stopping anything. Stopping first and then finding the build broken leaves
-      // nothing running, which is worse than the old code still serving. Only the adapter knows
-      // what building means, so only the adapter can get this right — a described server gets the
-      // same order for free.
+      // ⚠️ Build before stopping anything. Stopping first and then finding the
+      // build broken leaves nothing running, which is worse than the old code
+      // still serving. Only the adapter knows what building means, so only the
+      // adapter can get this right — a described server gets the same order
+      // for free.
       restart: async emit => {
         emit('step', 'building ...');
         if (!(await buildAdmin())) {
@@ -260,33 +266,40 @@ export default {
     },
   ],
 
-  // Work started outside the watcher, shown as its own section with a kill verb on each row.
+  // Work started outside the watcher, shown as its own section with a kill
+  // verb on each row.
   // tasks: () => readMyTaskRegistry(),
 
-  // Commands to run after a pull that brought something in, once the servers are back. For what a
-  // checkout owns that no server adapter covers — a crontab to rewrite, a cache to warm.
-  // afterPull: [{ label: 'rewrite crontab', command: './scripts/crontab.sh' }],
+  // Commands to run after a pull that brought something in, once the servers
+  // are back. For what a checkout owns that no server adapter covers — a
+  // crontab to rewrite, a cache to warm.
+  // afterPull: [{ label: 'rewrite crontab', command: './scripts/cron.sh' }],
 
-  // Which of the machine-level sections are drawn. Omitted means none of them, so a config file
-  // that says nothing here gets a screen about the repository alone.
+  // Which of the machine-level sections are drawn. Omitted means none of them,
+  // so a config file that says nothing here gets a screen about the repository
+  // alone.
   providers: {
-    // agentSessions: true,  // live Claude / Codex sessions, and restarting one in its tmux pane
-    // quota: true,          // how much of each usage window is spent, and when it resets
-    // services: true,       // the public status pages of the services those CLIs depend on
-    // tools: true,          // installed CLI versions — and it installs new releases by default
-    // sshAgent: true,       // whether a key is loaded, and an (a)dd verb while there is none
+    // agentSessions: true, // live Claude / Codex sessions, restartable in tmux
+    // quota: true,         // how much of each usage window is spent
+    // services: true,      // the public status pages those CLIs depend on
+    // tools: true,         // installed CLI versions — and it installs new ones
+    // sshAgent: true,      // whether a key is loaded, and an (a)dd verb if not
     //
-    // The array forms, in place of `true`, for a machine that watches other pages or other CLIs:
+    // The array forms, in place of `true`, for a machine that watches other
+    // pages or other CLIs. `autoUpdate: false` reports a new release and
+    // installs nothing, where `tools: true` installs it.
     // services: [{ name: 'Anthropic', page: 'https://status.claude.com' }],
-    // tools: [{ command: 'claude', repo: 'anthropics/claude-code', autoUpdate: false }],
-    //   `autoUpdate: false` reports a new release and installs nothing; `tools: true` installs.
+    // tools: [
+    // { command: 'claude', repo: 'anthropics/claude-code', autoUpdate: false },
+    // ],
     //
-    // ⚠️ The only switch that spends anything: it sends `claude -p` to open a five-hour window
-    // that has closed, because a window left shut is a window off the day's total. It runs in an
-    // empty sandbox directory rather than in your repository, so the message costs one word
-    // instead of pulling a whole project's instructions into a context.
+    // ⚠️ The only switch that spends anything: it sends `claude -p` to open a
+    // five-hour window that has closed, because a window left shut is a window
+    // off the day's total. It runs in an empty sandbox directory rather than in
+    // your repository, so the message costs one word instead of pulling a whole
+    // project's instructions into a context.
     // quotaSession: true,
-    // quotaSession: { cwd: '/tmp/my-site-sandbox' },   // choose where that session runs
+    // quotaSession: { cwd: '/tmp/my-site-sandbox' },  // where it runs
   },
 };
 ```

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- docs: the config example in the README was rewrapped so no line passes **80 columns**, which is
+  where GitHub starts scrolling a code block sideways. The content is the same; the comments are
+  broken across lines instead of running past the edge.
+
 - docs: the dashboard capture in the README was retaken at **80 columns** and now shows the two
   sections it was missing — the live Claude and Codex sessions, and the service-status rows. The
   old one was 108 columns wide, which GitHub renders with a horizontal scrollbar, and it had
