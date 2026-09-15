@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- docs: README reorganized around what a reader does rather than how the package is built.
+  Install and start come first (bun, with npm on the next line), then one section saying what the
+  screen shows and what can be done to the thing under the cursor, then the config file, and only
+  then the reference material. The config example now carries **every optional part, commented
+  out, each with a line saying what turning it on gives you** — so the file can be read once
+  instead of cross-referenced against three other sections.
+
+  The dashboard capture and every command shown were taken from a real run against 0.2.0 in a
+  throwaway project, and the `--help` block and the key list are byte-for-byte what the binary
+  prints. No code changed.
+
 ## 0.2.0
 
 - **`--start <script>` runs a server with no config file at all.** `npx next-watch --start dev`
