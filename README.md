@@ -47,7 +47,15 @@ needs no build.
 
 The package manager is the one the project already installs with, read from the lockfile —
 `bun.lock` (or `bun.lockb`) → bun, `pnpm-lock.yaml` → pnpm, `yarn.lock` → yarn,
-`package-lock.json` → npm, and npm where there is none.
+`package-lock.json` → npm, and npm where there is none. Where a checkout holds more than one
+lockfile, that order decides: a repository that moved to bun and left `package-lock.json` behind
+is a bun repository.
+
+**The install after a pull reads the same thing**, config file or not: when an incoming path is
+one of `pull.dependencyPaths`, the watcher runs `<pm> install`, with the lockfile read at that
+moment rather than when the watch started — the pull that swaps one lockfile for another is
+exactly the pull that moves the dependencies. `packageManager` in `package.json` (corepack) is
+not consulted.
 
 With no config file the rest is derived:
 
@@ -110,7 +118,8 @@ export default {
       { prefix: 'log/', reason: 'written by the servers running here' },
     ],
     // Receiving one of these means the dependencies moved, so an install runs before anything
-    // is restarted.
+    // is restarted. The install is `<pm> install`, with the manager read from the lockfile in
+    // the checkout at that moment — the same reading `--start` uses; see Zero config.
     dependencyPaths: ['package.json', 'package-lock.json'],
   },
 

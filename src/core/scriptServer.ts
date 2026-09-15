@@ -1,37 +1,9 @@
-/** The decisions behind `--start <script>` that follow from strings alone: which package
- *  manager runs the script, what a server's own output says about where it is listening, and
- *  what the watcher may call itself when nobody wrote a config file.
+/** The two readings behind `--start <script>` that follow from strings alone: what a server's
+ *  own output says about where it is listening, and what the watcher may call itself when
+ *  nobody wrote a config file.
  *
- *  All three are read off a directory listing or a line of stdout, so all three are tables. */
-
-export type PackageManager = 'npm' | 'bun' | 'pnpm' | 'yarn';
-
-/** Which lockfile means which manager, **in the order they are looked for**.
- *
- *  ⚠️ The order is the whole content of this list, because a tree with several lockfiles is
- *  ordinary: a repository that moved from npm to bun and never deleted `package-lock.json`
- *  still installs with bun. The first hit wins, so npm is last — it is also the answer for a
- *  tree with no lockfile at all, which is an npm tree nobody has installed yet. */
-const LOCKFILES: readonly { lockfile: string; manager: PackageManager }[] = [
-  { lockfile: 'bun.lock', manager: 'bun' },
-  { lockfile: 'bun.lockb', manager: 'bun' },
-  { lockfile: 'pnpm-lock.yaml', manager: 'pnpm' },
-  { lockfile: 'yarn.lock', manager: 'yarn' },
-  { lockfile: 'package-lock.json', manager: 'npm' },
-];
-
-export interface PackageManagerChoice {
-  manager: PackageManager;
-  /** The lockfile it was read from, or null when there was none. It is also what counts as a
-   *  dependency change, so the caller needs the name and not only the manager. */
-  lockfile: string | null;
-}
-
-/** The package manager for a directory holding these entries. */
-export function packageManagerFor(entries: readonly string[]): PackageManagerChoice {
-  const found = LOCKFILES.find(l => entries.includes(l.lockfile));
-  return found === undefined ? { manager: 'npm', lockfile: null } : { ...found };
-}
+ *  Which package manager runs the script is `packageManager.ts`, because the install after a
+ *  dependency change needs the same answer. */
 
 /** Where a server said it is listening. */
 export interface ServerAddress {

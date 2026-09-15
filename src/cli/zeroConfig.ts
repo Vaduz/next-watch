@@ -13,7 +13,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { asRecord } from '../core/util.js';
-import { packageManagerFor, safeAppName, type PackageManagerChoice } from '../core/scriptServer.js';
+import { safeAppName } from '../core/scriptServer.js';
+import { packageManagerAt } from '../io/packageManager.js';
+import type { PackageManagerChoice } from '../core/packageManager.js';
 import { zeroConfigProviders } from '../io/providers.js';
 import { loadConfig } from './load.js';
 import { scriptServers } from './scriptServer.js';
@@ -24,19 +26,9 @@ import type { NextWatchConfig } from '../config.js';
  *  because the servers need the resolved path **before** the config is resolved. */
 const DEFAULT_LOG_DIR = 'log';
 
-/** What is in a directory. **Unreadable answers the same as empty**, because every reading
- *  taken from this has a defensible answer for a directory with nothing in it. */
-function entriesOf(root: string): string[] {
-  try {
-    return fs.readdirSync(root);
-  } catch {
-    return [];
-  }
-}
-
 /** What the directory itself says: which manager installs here, and what to call the watcher. */
 function projectShape(root: string): { choice: PackageManagerChoice; appName: string } {
-  return { choice: packageManagerFor(entriesOf(root)), appName: appNameFor(root) };
+  return { choice: packageManagerAt(root), appName: appNameFor(root) };
 }
 
 /** The application's name, which names the cache and sandbox directories. */
@@ -111,7 +103,7 @@ export async function configFor(args: Args): Promise<NextWatchConfig> {
   const servers = scriptServers({
     scripts: args.start,
     build: args.build,
-    manager: packageManagerFor(entriesOf(root)).manager,
+    manager: packageManagerAt(root).manager,
     root,
     logDir: path.resolve(root, base.logDir ?? DEFAULT_LOG_DIR),
   });

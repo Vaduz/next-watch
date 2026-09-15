@@ -1,33 +1,8 @@
-// The three readings `--start <script>` rests on. Each one is a string in and a value out, so
-// each one is a table: which manager a tree installs with, what a line of a server's output
-// says about its address, and what a package name may be used as a directory name.
+// The two readings `--start <script>` rests on: what a line of a server's output says about
+// its address, and what a package name may be used as a directory name. Which manager a tree
+// installs with moved to `packageManager.test.ts`, because the install needs the same answer.
 import { describe, expect, it } from 'bun:test';
-import { packageManagerFor, parseServerAddress, safeAppName } from './scriptServer.js';
-
-describe('packageManagerFor', () => {
-  const cases: [name: string, entries: string[], manager: string, lockfile: string | null][] = [
-    ['npm', ['package.json', 'package-lock.json'], 'npm', 'package-lock.json'],
-    ['bun', ['package.json', 'bun.lock'], 'bun', 'bun.lock'],
-    ['bun, binary lockfile', ['package.json', 'bun.lockb'], 'bun', 'bun.lockb'],
-    ['pnpm', ['package.json', 'pnpm-lock.yaml'], 'pnpm', 'pnpm-lock.yaml'],
-    ['yarn', ['package.json', 'yarn.lock'], 'yarn', 'yarn.lock'],
-    // The case the order exists for: a repository that moved to bun and left the old lockfile
-    // behind installs with bun, not with whichever name happened to be read first.
-    ['bun beside a leftover package-lock.json', ['bun.lock', 'package-lock.json'], 'bun', 'bun.lock'],
-    ['pnpm beside a leftover yarn.lock', ['yarn.lock', 'pnpm-lock.yaml'], 'pnpm', 'pnpm-lock.yaml'],
-    ['no lockfile at all', ['package.json', 'src'], 'npm', null],
-    ['an empty directory', [], 'npm', null],
-    // A directory whose name looks like a lockfile is still not one, but this reader only sees
-    // names: what matters is that a near miss does not match.
-    ['a near miss', ['package-lock.json.bak', 'bun.lock.txt'], 'npm', null],
-  ];
-
-  for (const [name, entries, manager, lockfile] of cases) {
-    it(name, () => {
-      expect(packageManagerFor(entries)).toEqual({ manager, lockfile } as ReturnType<typeof packageManagerFor>);
-    });
-  }
-});
+import { parseServerAddress, safeAppName } from './scriptServer.js';
 
 describe('parseServerAddress', () => {
   const cases: [name: string, line: string, expected: { url: string; port: number | null } | null][] = [

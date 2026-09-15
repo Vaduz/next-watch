@@ -214,6 +214,16 @@ describe('describePlan', () => {
   it('names each server it will restart', () => {
     expect(describePlan(plan(['package.json']))).toBe('npm install / restart admin / restart web');
   });
+
+  // The row has to name the command that will actually run. A bun checkout told it was going to
+  // run `npm install` said something untrue about its own tree.
+  it('names the package manager the install will use', () => {
+    expect(describePlan(plan(['package.json']), 'bun')).toBe('bun install / restart admin / restart web');
+    expect(describePlan(plan(['package.json']), 'pnpm')).toContain('pnpm install');
+    // Omitted means npm, which is what every caller written before there was a second argument
+    // meant by leaving it out.
+    expect(describePlan(plan(['package.json']))).toContain('npm install');
+  });
 });
 
 describe('hooksToRun', () => {

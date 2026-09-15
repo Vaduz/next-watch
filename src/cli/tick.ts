@@ -22,6 +22,7 @@ import {
   type WatchDiffStat,
 } from '../core/gitOutput.js';
 import { describeIncoming } from '../core/view/incoming.js';
+import { packageManagerAt } from '../io/packageManager.js';
 import { SaidOnce, type RepoState, type WatchState } from '../core/watchState.js';
 import type { ResolvedConfig } from '../config.js';
 import { type Emit } from './actions/stream.js';
@@ -151,8 +152,12 @@ async function merge(config: ResolvedConfig, screen: WatchScreen): Promise<boole
 }
 
 /** Report what arrived: the commits, the size of the diff, and what follows. The first row is
- *  an event and the rest is detail, so nothing lands outside the frame on a terminal. */
-function reportIncoming(incoming: Incoming, plan: WatchPlan, screen: WatchScreen): void {
+ *  an event and the rest is detail, so nothing lands outside the frame on a terminal.
+ *
+ *  The manager is passed in rather than read here, because **it is read after the merge**: the
+ *  row has to name the command the install is about to run, and the merge may have brought the
+ *  lockfile that decides it. */
+function reportIncoming(incoming: Incoming, plan: WatchPlan, manager: string, screen: WatchScreen): void {
   const { head, details } = describeIncoming(
     {
       nowMs: Date.now(),
@@ -164,7 +169,7 @@ function reportIncoming(incoming: Incoming, plan: WatchPlan, screen: WatchScreen
       totalFiles: incoming.stat.files || incoming.paths.length,
       insertions: incoming.stat.insertions,
       deletions: incoming.stat.deletions,
-      plan: describePlan(plan),
+      plan: describePlan(plan, manager),
     },
     screen.paint,
     screen.layout(),
@@ -212,7 +217,8 @@ export async function tick(
   said.clear();
   if (!(await merge(config, screen))) return incoming;
   state.lastPull = { atMs: Date.now(), commits: incoming.behind };
-  reportIncoming(incoming, plan, screen);
+  // Read after the merge: the pull may have brought the lockfile that decides it.
+  reportIncoming(incoming, plan, packageManagerAt(config.root).manager, screen);
   if (args.restart) {
     // `finally`, because the hooks must run **even when a restart failed or threw**: whether a
     // crontab is current has nothing to do with whether a server came back up, and the day the
@@ -232,7 +238,10 @@ function reportDryRun(incoming: Incoming, plan: WatchPlan, config: ResolvedConfi
   const hooks = hooksToRun(config.afterPull, incoming.paths);
   // Named rather than counted: the point of a dry run is seeing which commands would run.
   const then = hooks.length ? ` then ${hooks.map(h => h.label).join(', ')}` : '';
-  screen.event(nowMs, 'change', `(dry-run) ${incoming.behind} commit(s) would come in -> ${describePlan(plan)}${then}`);
+  // The manager as the tree stands now. A dry run pulls nothing, so nothing can change it.
+  const manager = packageManagerAt(config.root).manager;
+  const what = describePlan(plan, manager);
+  screen.event(nowMs, 'change', `(dry-run) ${incoming.behind} commit(s) would come in -> ${what}${then}`);
   const shown = incoming.paths.slice(0, MAX_PATHS_SHOWN);
   const rest = incoming.paths.length - shown.length;
   for (const line of [...shown, ...(rest > 0 ? [`... ${rest} more file(s)`] : [])]) screen.detail(line);

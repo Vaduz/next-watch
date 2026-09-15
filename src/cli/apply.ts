@@ -10,6 +10,8 @@
  *  and cannot be taken back, so a hook that fails leaves a red row and the next one still
  *  runs. */
 import { hooksToRun, type WatchPlan } from '../core/plan.js';
+import { installCommand } from '../core/packageManager.js';
+import { packageManagerAt } from '../io/packageManager.js';
 import type { ResolvedConfig } from '../config.js';
 import { type Emit } from './actions/stream.js';
 
@@ -20,12 +22,21 @@ export type RunCommand = (o: {
   cwd: string;
 }) => Promise<{ ok: boolean; detail: string | null }>;
 
-/** Install dependencies. The command is fixed because `package.json` is what a dependency
- *  change means, and the adapters restart afterwards either way. */
+/** Install dependencies with **the manager the checkout's lockfile names**.
+ *
+ *  ⚠️ The lockfile is read here, after the merge, rather than once when the watch started. A
+ *  pull that swaps one lockfile for another is exactly the pull that moves the dependencies, so
+ *  a manager remembered from startup would be the one the repository has just left behind.
+ *
+ *  Running the wrong one is not a cosmetic mistake: npm in a bun or pnpm checkout ignores the
+ *  lockfile that is there, can write a `package-lock.json` of its own into the tree, and leaves
+ *  `node_modules` out of step with what the lockfile pins. */
 async function install(config: ResolvedConfig, emit: Emit, run: RunCommand): Promise<boolean> {
-  emit('step', 'npm install ...');
-  const { ok, detail } = await run({ command: 'npm', args: ['install'], cwd: config.root });
-  emit(ok ? 'step' : 'error', ok ? 'npm install done' : `npm install failed${detail === null ? '' : `: ${detail}`}`);
+  const { command, args } = installCommand(packageManagerAt(config.root).manager);
+  const label = [command, ...args].join(' ');
+  emit('step', `${label} ...`);
+  const { ok, detail } = await run({ command, args, cwd: config.root });
+  emit(ok ? 'step' : 'error', ok ? `${label} done` : `${label} failed${detail === null ? '' : `: ${detail}`}`);
   return ok;
 }
 

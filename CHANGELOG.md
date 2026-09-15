@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+- **The install after a dependency change ran `npm install` in every project**, including one
+  whose lockfile is `bun.lock`, `pnpm-lock.yaml` or `yarn.lock`. npm ignores a foreign lockfile,
+  can write a `package-lock.json` of its own into the checkout, and leaves `node_modules` out of
+  step with what the lockfile actually pins — on a machine nobody is sitting at, until somebody
+  wonders why the running code does not match the lock.
+
+  It now runs `<pm> install`, with the manager read from the lockfile: `bun.lock` and
+  `bun.lockb` → bun, `pnpm-lock.yaml` → pnpm, `yarn.lock` → yarn, `package-lock.json` → npm, and
+  npm where there is none. The same reading `--start` uses for spawning a server, so one project
+  can no longer be run with two managers.
+
+  **The lockfile is read when the install is about to run**, not once when the watch started: a
+  pull that swaps one lockfile for another is exactly the pull that moves the dependencies, and
+  a manager remembered from startup would name the one the repository has just left. The row
+  that reports what a pull will do names the same command, so the report and the install cannot
+  disagree.
+
+  `describePlan` (exported from `next-watch/core`) takes the manager as an optional second
+  argument. Omitted it still says `npm install`, which is what every existing caller meant.
+
+  Not included, and worth knowing: there is no config-file override, and `packageManager` in
+  `package.json` (corepack) is not consulted. A checkout whose lockfile is not committed gets
+  npm, exactly as before.
+
 - **`--start <script>` runs a server with no config file at all.** `npx next-watch --start dev`
   in a Next.js project set up the usual way now watches, serves and restarts without a line
   written down. Until this, watching a single project meant a four-function adapter

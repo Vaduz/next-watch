@@ -10,7 +10,7 @@
  *  root. Hence the split: the lifecycle is a library, the policy is a command. */
 import path from 'node:path';
 import { restartUnless } from '../core/plan.js';
-import type { PackageManager } from '../core/scriptServer.js';
+import type { PackageManager } from '../core/packageManager.js';
 import { ChildServer } from '../io/scriptServer.js';
 import { streamCommand, type Emit } from './actions/stream.js';
 import type { WatchServerAdapter } from '../config.js';

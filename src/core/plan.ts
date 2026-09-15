@@ -145,11 +145,16 @@ export function conflictingDirtyPaths(dirty: readonly string[], incoming: readon
   return dirty.filter(p => set.has(p));
 }
 
-/** What one poll did, as the material for a single log row. */
-export function describePlan(plan: WatchPlan): string {
+/** What one poll did, as the material for a single log row.
+ *
+ *  `packageManager` names the command the install will actually run, so the row and the install
+ *  cannot say different things. **It defaults to npm for compatibility, not out of preference**:
+ *  this is exported from `next-watch/core`, and a host calling it with one argument was written
+ *  before there was a second. Callers inside this package always pass the manager they read. */
+export function describePlan(plan: WatchPlan, packageManager = 'npm'): string {
   if (plan.blockers.length) return 'skipped the pull';
   const todo: string[] = [];
-  if (plan.install) todo.push('npm install');
+  if (plan.install) todo.push(`${packageManager} install`);
   for (const id of plan.restart) todo.push(`restart ${id}`);
   return todo.length ? todo.join(' / ') : 'nothing to restart (the dev servers pick these up)';
 }
