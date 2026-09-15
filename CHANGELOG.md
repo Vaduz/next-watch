@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
 
 - **A server can be described in the config file instead of written out.** `servers` now takes
   `{ id, script, build?, preStart?, restartPaths? | ignorePaths?, label? }` beside the adapter
@@ -10,10 +10,12 @@
 
   - `build` runs before anything is stopped, and a build that fails leaves the running server
     serving — the rule every adapter here is held to, now had for free.
-  - `preStart` prepares something before **every** start, as an npm script name or an
+  - `preStart` prepares something before a start, as an npm script name or an
     `async (emit) => {}`. It runs **before the stop**, so the old server is still serving while it
     works and a restart adds no gap; a failure leaves that old server running, exactly as a failed
-    build does.
+    build does. It does **not** run when the server is already up and the "start" turns out to be
+    an adoption — preparing for a start that will not happen would rewrite what a live server is
+    serving from.
   - `restartPaths` restarts only for paths under one of the given prefixes (`web/` covers that
     tree, and a whole file name works too). `ignorePaths` is the opposite: everything except
     those. Giving both is refused, because together they say nothing. Giving neither keeps what
@@ -42,11 +44,15 @@
   a port that is already taken. Its address comes from the log file, which remembers across runs.
 
   ⚠️ The note is trusted only when the process it names is still the one it was written about:
-  alive, signalable by this user, running something whose command line still names the script,
-  and — on Linux, from `/proc/<pid>/stat` — started at the moment recorded. Pids are reused, and
-  signalling a stranger's process because a file three days old still names its number is the
-  failure worth spending three checks to avoid. A note that fails any of them is removed as it is
-  read.
+  alive, signalable by this user, and — on Linux, from `/proc/<pid>/stat` — started at the moment
+  recorded. Where that start time cannot be read, the command line has to still name the script
+  instead. Pids are reused, and signalling a stranger's process because a file three days old
+  still names its number is the failure worth spending these checks to avoid. A note that fails
+  them is removed as it is read.
+
+  A start waits long enough afterwards to see the common failure — a port already taken — rather
+  than reporting a server that is about to exit: unlike an ordinary child there is no handle to
+  hear an exit on.
 
   It is **not** stopped when the watch exits; that is the point. Stopping it is something a person
   asks for, and `(s)top` signals the whole process group and takes the note away.
