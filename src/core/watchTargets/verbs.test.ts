@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
-import { actionLabel, helpLines, parseWatchCommand, shortcutVerb, verbHint, verbLabel } from './verbs.js';
+import { actionLabel, helpLines, parseWatchCommand, shortcutVerb, verbHint, verbLabel, HELP_WIDTH } from './verbs.js';
 import { watchTargets } from './targets.js';
+import { displayWidth } from '../term/textWidth.js';
 import type { WatchTarget } from '../watchTargets.js';
 import type { WatchPanel } from '../types.js';
 
@@ -219,6 +220,33 @@ describe('helpLines', () => {
   it('covers the key bindings and the verbs each kind has', () => {
     const text = helpLines().join('\n');
     for (const word of ['Tab', '(r)estart', '(k)ill', '(o)pen', '(u)pdate', '(q)uit']) expect(text).toContain(word);
+  });
+
+  // ⚠️ The rule that has to survive the next rewording. These lines are printed inside the
+  // frame, where anything longer wraps and costs a row; in `--help`, where yargs indents them
+  // by two; and in the README, which GitHub scrolls sideways past about ninety columns. The
+  // table is one row per line so a failure names the line that grew.
+  describe(`every line fits in ${HELP_WIDTH} columns`, () => {
+    for (const [at, line] of helpLines().entries()) {
+      it(`line ${at + 1}: ${line.slice(0, 32)}...`, () => {
+        // Counted as the terminal counts it: `·` is three bytes and one column.
+        expect(displayWidth(line)).toBeLessThanOrEqual(HELP_WIDTH);
+      });
+    }
+  });
+
+  // The `--help` epilogue indents every line by two, so the widest line plus that indent is
+  // what a person with an 80-column terminal actually sees.
+  it('still fits once --help has indented it', () => {
+    const widest = Math.max(...helpLines().map(displayWidth));
+
+    expect(widest + 2).toBeLessThanOrEqual(HELP_WIDTH);
+  });
+
+  it('says nothing twice, so a split line is a continuation and not a repeat', () => {
+    const lines = helpLines();
+
+    expect(new Set(lines).size).toBe(lines.length);
   });
 });
 

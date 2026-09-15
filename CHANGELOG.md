@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **The `(h)elp` text is written to 80 columns.** Its widest line was 91, so on an 80-column
+  terminal the help wrapped inside the frame and cost rows, and `--help` wrapped it again after
+  indenting it. The wording is unchanged where it fitted and split across two lines where it did
+  not; a table asserts every line against `HELP_WIDTH`, so the next rewording cannot quietly grow
+  past it. The README's copy of that block is the new output, as the rule requires.
+
 - docs: the config example in the README was rewrapped so no line passes **80 columns**, which is
   where GitHub starts scrolling a code block sideways. The content is the same; the comments are
   broken across lines instead of running past the edge.

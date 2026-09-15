@@ -84,14 +84,29 @@ export function verbHint(target: WatchTarget | null): string {
   return `${target.key}  ${target.note ?? 'nothing to do here'}`;
 }
 
-/** What `help` prints: the key bindings, and the verbs each kind of target has. */
+/** The width every help line is written to fit.
+ *
+ *  ⚠️ **Eighty, and the reason is other people's terminals.** These lines are printed three
+ *  ways: inside the frame, where anything longer wraps and costs a row; in `--help`, where
+ *  yargs indents them by two; and in the README, which has to match the real output and which
+ *  GitHub scrolls sideways past about ninety. Eighty is the width that survives all three, so
+ *  `HELP_WIDTH` is asserted as a table rather than left to whoever edits the wording next. */
+export const HELP_WIDTH = 80;
+
+/** What `help` prints: the key bindings, and the verbs each kind of target has.
+ *
+ *  Every line is kept **within `HELP_WIDTH`** — see the note there. Splitting a thought across
+ *  two lines is preferred to trimming the thought. */
 export function helpLines(): string[] {
   return [
-    'Tab / Shift-Tab  move the cursor · up/down  scroll the selected log pane · Esc  clear',
-    'press the letter in ( ) to run it on what the cursor is on · ":" types a whole verb instead',
-    'server: (r)estart | (s)top | st(a)rt · task: (k)ill | (s)top · session: (r)estart | (s)top',
-    'session (r)estart = SIGTERM, then type its resume command back into the same tmux pane',
-    'service: (o)pen · tool: (u)pdate · log pane: (f)ocus to fill the frame, again to go back',
+    'Tab / Shift-Tab  move the cursor · up/down  scroll the log pane · Esc  clear',
+    'press the letter in ( ) to run that verb on what the cursor is on',
+    '":" types a whole verb instead',
+    'server: (r)estart | (s)top | st(a)rt · task: (k)ill | (s)top',
+    'session: (r)estart | (s)top · service: (o)pen · tool: (u)pdate',
+    'session (r)estart = SIGTERM, then type its resume command back',
+    'into the same tmux pane',
+    'log pane: (f)ocus to fill the frame, again to go back',
     'ssh: (a)dd  run ssh-add here (only shown while the agent has no key)',
     'anywhere: (h)elp | (q)uit',
   ];
