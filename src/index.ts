@@ -16,6 +16,7 @@ export type {
   ResolvedProviders,
   ServiceSpec,
   ToolSpec,
+  ToolsSetting,
   ScriptServerEntry,
   WatchProviders,
   WatchServerAdapter,

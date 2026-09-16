@@ -9,6 +9,7 @@
 import { sleep } from '../core/util.js';
 import { type SshAgentCard, type ToolVersionRow, type WatchPanel } from '../core/types.js';
 import { type WatchLayout } from '../core/view/index.js';
+import type { Mark } from '../core/term/index.js';
 import { renderWatchPanel } from '../core/view/panel.js';
 import { nextSelection, type WatchState } from '../core/watchState.js';
 import { collectWatchPanel, localSnapshot, panelKey } from './panel.js';
@@ -95,6 +96,12 @@ async function safely<T>(load: () => Promise<T>, fallback: T): Promise<T> {
   }
 }
 
+/** Only what the auto-update pass tells the screen. Narrowed so the lines it writes can be
+ *  read back without a terminal — they are the only record that a version moved on its own. */
+export interface AutoUpdateScreen {
+  event: (atMs: number, mark: Mark, text: string) => void;
+}
+
 /** Install a new release of a CLI the watcher itself noticed.
  *
  *  It goes through the **same path a typed `update` takes**, so everything that path already
@@ -104,7 +111,12 @@ async function safely<T>(load: () => Promise<T>, fallback: T): Promise<T> {
  *
  *  One tool per pass. If something else is running it is left for the next pass, and the memo
  *  is written **only when one is actually started**, so a skipped one comes round again. */
-export function maybeAutoUpdate(config: ResolvedConfig, state: WatchState, screen: WatchScreen, start: Start): void {
+export function maybeAutoUpdate(
+  config: ResolvedConfig,
+  state: WatchState,
+  screen: AutoUpdateScreen,
+  start: Start,
+): void {
   const wanted = config.providers.autoUpdate;
   if (!wanted.length || state.versions === null || state.ui.busy !== null) return;
   const [name] = toolsToAutoUpdate(state.versions, state.autoUpdated).filter(n => wanted.includes(n));

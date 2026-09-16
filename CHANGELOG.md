@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+- **`tools: { autoUpdate: false }` turns the automatic install off in one line.** Claude Code and
+  Codex have kept themselves up to date since the section existed — a watcher that reports a new
+  release for days without installing it is only a reminder — but saying "report and install
+  nothing" meant writing the default list out entry by entry with the flag on each, which is a
+  copy of a list that then stops following this package's. The object form says the one thing and
+  keeps the list; `tools: true` and the array form are unchanged, and an object with a key nobody
+  knows (`autoupdate`) is refused **by name**, with the config file's path, rather than obeyed as
+  its opposite.
+
+- docs: the README said the CLIs update themselves only in the comments of the config example, so
+  a reader learned about it by accident or not at all. It is now one of the sections listed under
+  "What you see, and what you can do", with the three lines it writes to the event log, and "What
+  leaves the machine" has the install itself: the watch opens no connection for it, and each CLI
+  fetches its own release from wherever it was installed from.
+
 ## 0.4.1
 
 - **Stopping a server no longer stops the jobs it started.** A restart sent SIGTERM to the whole

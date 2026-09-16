@@ -20,6 +20,7 @@
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { quotaSessionPlans, type QuotaSessionPlan, type QuotaSessionSwitch } from '../core/quota/sessionConfig.js';
+import { toolsIn, type ToolsSetting } from '../core/toolsConfig.js';
 import type { AgentSessionRow, QuotaCard, ServiceCard, SshAgentCard, ToolVersionRow } from '../core/types.js';
 import { clientName } from './http.js';
 import { liveAgentSessions } from './sessions/index.js';
@@ -28,7 +29,7 @@ import { sshAgentCard } from './sshAgent.js';
 import { toolVersionRows, type ToolSpec } from './toolVersions.js';
 import { watchQuotaCards } from './quota/watch.js';
 
-export type { ServiceSpec, ToolSpec };
+export type { ServiceSpec, ToolSpec, ToolsSetting };
 
 /** Ten minutes between version checks. GitHub allows 60 unauthenticated requests an hour, and
  *  a release does not appear more often than that anyway. */
@@ -43,8 +44,9 @@ const DEFAULT_SERVICES: readonly ServiceSpec[] = [
 ];
 
 /** The CLIs whose versions are shown. **They update themselves by default**: a watcher that
- *  reports a new release for days without installing it is only a reminder. Give the array
- *  explicitly with `autoUpdate: false` to have it report and leave the installing alone. */
+ *  reports a new release for days without installing it is only a reminder. `autoUpdate: false`
+ *  — on the switch, or on one entry of an array given explicitly — has it report and leave the
+ *  installing alone. */
 const DEFAULT_TOOLS: readonly ToolSpec[] = [
   { command: 'claude', repo: 'anthropics/claude-code', autoUpdate: true },
   { command: 'codex', repo: 'openai/codex', autoUpdate: true },
@@ -69,8 +71,11 @@ export interface WatchProviders {
   quotaSession?: QuotaSessionSwitch;
   /** The public status pages. Defaults to the two the CLIs depend on. */
   services?: boolean | readonly ServiceSpec[];
-  /** The installed CLI versions, and installing a new release. */
-  tools?: boolean | readonly ToolSpec[];
+  /** The installed CLI versions, and installing a new release.
+   *
+   *  `true` is the two CLIs there are, each keeping itself up to date. `{ autoUpdate: false }`
+   *  is the same two, reported and never installed. An array is a list of one's own. */
+  tools?: boolean | ToolsSetting | readonly ToolSpec[];
   /** Whether an ssh-agent holds a key. */
   sshAgent?: boolean;
 }
@@ -151,7 +156,7 @@ export function buildProviders(o: {
   const { appName } = o;
   const client = clientName(appName);
   const services = listOf(o.providers.services, DEFAULT_SERVICES);
-  const tools = listOf(o.providers.tools, DEFAULT_TOOLS);
+  const tools = toolsIn(o.providers.tools, DEFAULT_TOOLS, 'providers.tools');
   const quotas = (): Promise<QuotaCard[]> =>
     watchQuotaCards({ appName, client, nowMs: Date.now(), ttlMs: MINUTE_TTL_MS });
   const session = quotaSessionSetting(o.providers.quotaSession, appName, o.where ?? 'providers.quotaSession');

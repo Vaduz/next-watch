@@ -142,3 +142,42 @@ describe('loadConfig, the quota-session schedule', () => {
     });
   }
 });
+
+// Same rule for `tools`: a config that says `autoupdate: false` and is obeyed as `true` would
+// install releases on a machine that asked for the opposite, and say nothing about it.
+describe('loadConfig, the tools switch', () => {
+  const withProviders = (providers: string): string =>
+    `export default { appName: 'site', pull: { blocked: [] }, servers: [], providers: ${providers} };\n`;
+
+  const accepted: [name: string, providers: string][] = [
+    ['the defaults', `{ tools: true }`],
+    ['the defaults with updating turned off', `{ tools: { autoUpdate: false } }`],
+    ['the defaults with updating turned on', `{ tools: { autoUpdate: true } }`],
+    ['a list of its own', `{ tools: [{ command: 'codex', repo: 'openai/codex' }] }`],
+    ['the section off', `{ tools: false }`],
+  ];
+  for (const [name, providers] of accepted) {
+    it(`accepts ${name}`, async () => {
+      await loadConfig(configFile(withProviders(providers)));
+    });
+  }
+
+  const refused: [name: string, providers: string, message: RegExp][] = [
+    ['a misspelled key', `{ tools: { autoupdate: false } }`, /unknown key autoupdate/],
+    ['a flag that is not a flag', `{ tools: { autoUpdate: 'no' } }`, /autoUpdate must be true or false/],
+    ['a string', `{ tools: 'yes' }`, /must be true, false, an object, or an array/],
+    ['null', `{ tools: null }`, /must be true, false, an object, or an array/],
+  ];
+  for (const [name, providers, message] of refused) {
+    it(`refuses ${name}`, async () => {
+      const file = configFile(withProviders(providers));
+      const thrown = await loadConfig(file).then(
+        () => null,
+        (e: unknown) => (e instanceof Error ? e.message : JSON.stringify(e)),
+      );
+      if (thrown === null) throw new Error(`${file} was accepted, and should not have been`);
+      expect(thrown).toMatch(message);
+      expect(thrown.startsWith(file)).toBe(true);
+    });
+  }
+});

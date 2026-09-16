@@ -12,7 +12,7 @@ import type { WatchServerRow } from './core/types.js';
 import type { Mark, Tone } from './core/term/index.js';
 import { buildProviders, type ResolvedProviders, type WatchProviders } from './io/providers.js';
 
-export type { ResolvedProviders, ServiceSpec, ToolSpec, WatchProviders } from './io/providers.js';
+export type { ResolvedProviders, ServiceSpec, ToolSpec, ToolsSetting, WatchProviders } from './io/providers.js';
 
 /** Put one line in the event log. Adapters use this to say what they are doing while they do
  *  it, rather than writing to stdout — **the screen has a single outlet**, and anything printed

@@ -49,6 +49,20 @@ describe('buildProviders', () => {
     ]);
   });
 
+  it('takes the whole default list out of auto-update with one key', () => {
+    // Without the object form this needed the default array copied out with the flag on each
+    // entry, and a copy of a list stops following the list.
+    expect(build({ tools: { autoUpdate: false } }).autoUpdate).toEqual([]);
+    expect(build({ tools: { autoUpdate: false } }).toolVersions).toBeTypeOf('function');
+    expect(build({ tools: { autoUpdate: true } }).autoUpdate).toEqual(['claude', 'codex']);
+    expect(build({ tools: {} }).autoUpdate).toEqual(['claude', 'codex']);
+  });
+
+  it('refuses a tools object it cannot read, naming the key', () => {
+    expect(() => build({ tools: { autoupdate: false } as never })).toThrow('providers.tools: unknown key autoupdate');
+    expect(() => build({ tools: { autoUpdate: 'no' } as never })).toThrow('providers.tools.autoUpdate');
+  });
+
   it('opens the quota window in a sandbox named after the application, or wherever it is told', () => {
     expect(build({ quotaSession: true }).quotaSession?.cwd).toBe(join(tmpdir(), 'site'));
     expect(build({ quotaSession: { cwd: '/tmp/elsewhere' } }).quotaSession?.cwd).toBe('/tmp/elsewhere');

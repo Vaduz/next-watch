@@ -10,6 +10,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { asRecord } from '../core/util.js';
 import { quotaSessionPlans, type QuotaSessionSwitch } from '../core/quota/sessionConfig.js';
+import { toolsIn } from '../core/toolsConfig.js';
 import type { NextWatchConfig } from '../config.js';
 
 /** Load the config module and check that it exported something usable. The message names the
@@ -30,6 +31,7 @@ export async function loadConfig(file: string): Promise<NextWatchConfig> {
   if (asRecord(shape.pull) === null) throw new Error(`${resolved}: pull is required`);
   for (const entry of shape.servers as unknown[]) checkServer(entry, resolved);
   checkQuotaSession(shape.providers, resolved);
+  checkTools(shape.providers, resolved);
   return config as NextWatchConfig;
 }
 
@@ -46,6 +48,14 @@ function checkQuotaSession(providers: unknown, resolved: string): void {
   }
   // Reading it is what checks it, and the reading names the key each list came from.
   quotaSessionPlans(switched as QuotaSessionSwitch, `${resolved}: providers.quotaSession`);
+}
+
+/** Check the `tools` switch while the file's path is still in hand, for the same reason
+ *  `checkQuotaSession` does: a mistyped `autoupdate` is a typing mistake, and the answer to one
+ *  is the file it is in. The defaults are irrelevant to the check, so an empty list stands in
+ *  for them. */
+function checkTools(providers: unknown, resolved: string): void {
+  toolsIn(asRecord(providers)?.tools as Parameters<typeof toolsIn>[0], [], `${resolved}: providers.tools`);
 }
 
 /** What is wrong with one `servers` entry, or null when nothing is.

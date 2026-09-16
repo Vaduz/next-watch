@@ -120,6 +120,12 @@ one of them is drawn except the last, which waits for `--quota-session`**; with 
 - **Quota windows** — how much of each usage window is spent, and when it resets.
 - **Service status** — the public status pages of the services those CLIs depend on.
 - **Tool versions** — the installed CLI versions against the newest published release.
+- **The CLIs keep themselves up to date.** When Claude Code or Codex publishes a release, the
+  watch installs it and says so: `claude 2.1.280 is out (installed 2.1.273), updating ...`, the
+  installer's own output as it arrives, then `claude 2.1.273 -> 2.1.280` once the new version
+  reads back. One CLI at a time, once per release, and never while something else is running. It
+  is **on by default**, and `tools: { autoUpdate: false }` keeps the version rows and the
+  `(u)pdate` verb while installing nothing on its own.
 - **ssh-agent** — whether a key is loaded, because without one a pull over SSH simply fails.
 - **Opening a closed quota window** — the one section that _spends_ something: it starts a session
   of its own (`claude -p "hi"`, `codex exec "hi"`) in an empty sandbox directory. **Off unless
@@ -310,9 +316,13 @@ export default {
     // tools: true,         // installed CLI versions — and it installs new ones
     // sshAgent: true,      // whether a key is loaded, and an (a)dd verb if not
     //
+    // The two CLIs keep themselves up to date, which is what `tools: true`
+    // includes. To have the versions reported and nothing installed, say so
+    // once rather than copying the default list out:
+    // tools: { autoUpdate: false },
+    //
     // The array forms, in place of `true`, for a machine that watches other
-    // pages or other CLIs. `autoUpdate: false` reports a new release and
-    // installs nothing, where `tools: true` installs it.
+    // pages or other CLIs. An entry's own `autoUpdate` decides for that one.
     // services: [{ name: 'Anthropic', page: 'https://status.claude.com' }],
     // tools: [
     // { command: 'claude', repo: 'anthropics/claude-code', autoUpdate: false },
@@ -458,8 +468,13 @@ and never more often than this:
 | `codex app-server` (a local process, not the network)                 | the same, for the other CLI       | at most once a minute                                                                                  | `quota: false`                         |
 | `status.claude.com`, `status.openai.com`                              | the public status summaries       | at most once a minute                                                                                  | `services: false`                      |
 | `api.github.com/repos/<repo>/releases/latest`                         | the newest published version      | at most once every ten minutes                                                                         | `tools: false`                         |
+| `claude update`, `codex update` (local processes)                     | installing a release that is out  | at most once per release published upstream                                                            | `tools: { autoUpdate: false }`         |
 | `claude -p "hi"` (a local process, through the CLI's own credentials) | opening a closed five-hour window | at most once per closed window, or once per listed time                                                | `quotaSession: false`, `claude: false` |
 | `codex exec "hi"` (the same, for the other CLI)                       | the same                          | the same                                                                                               | `quotaSession: false`, `codex: false`  |
+
+The install is the one row where **the watch itself opens no connection**: it runs that CLI's own
+update command and reads its output. Where a CLI fetches its release from is that CLI's own
+business, and this package chooses nothing about it.
 
 Every one of them has a timeout, none of them can throw, and a failure costs its own section and
 nothing else. The credentials the quota reads are the ones the CLI already wrote on this machine;
