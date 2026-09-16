@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.1
 
 - **Stopping a server no longer stops the jobs it started.** A restart sent SIGTERM to the whole
   process tree under the server, and a job the server had spawned for the user with
