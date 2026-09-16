@@ -11,15 +11,7 @@ export {
   type QuotaWindowWithDuration,
 } from './window.js';
 export { findClaudeWeeklyModelLimit, quotaNumber, retryAfterMs, type ClaudeScopedQuotaWindow } from './value.js';
-export {
-  quotaLevel,
-  quotaTone,
-  sessionQuotaText,
-  sessionQuotas,
-  type QuotaLevel,
-  type QuotaSessionProbe,
-  type SessionQuota,
-} from './view.js';
+export { quotaLevel, quotaTone, sessionQuotaText, sessionQuotas, type QuotaLevel, type SessionQuota } from './view.js';
 export {
   claudeRateLimitsOf,
   codexInitializeLine,

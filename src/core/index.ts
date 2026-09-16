@@ -19,7 +19,7 @@ export {
 export { sshAgentSummary, sshAgentNeedsKey, SSH_TARGET_KEY } from './sshAgentView.js';
 export { installCommand, packageManagerFor, type PackageManager, type PackageManagerChoice } from './packageManager.js';
 export { isBehind, type AutoUpdateMemo } from './toolVersionView.js';
-export { quotaTone, type QuotaSessionProbe } from './quota/view.js';
+export { quotaTone } from './quota/view.js';
 export { type WatchTarget, type WatchTargetKind } from './watchTargets.js';
 export { resolveSelection, stepSelection, tabTargets, toolTarget, watchTargets } from './watchTargets/targets.js';
 export {

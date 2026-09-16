@@ -14,7 +14,7 @@ import { type WatchTarget } from './watchTargets.js';
 import { resolveSelection, tabTargets, watchTargets } from './watchTargets/targets.js';
 import { type LocalSnapshot } from './watchEvents.js';
 import { type AutoUpdateMemo } from './toolVersionView.js';
-import { type QuotaSessionProbe } from './quota/view.js';
+import { type OpenedWindow } from './quota/session.js';
 import { type FiredTimes } from './quota/schedule.js';
 
 /** What the watcher knows about **one CLI's** five-hour window: what it has already done about
@@ -24,9 +24,19 @@ import { type FiredTimes } from './quota/schedule.js';
  *  rather than here: what counts as already past depends on the times, and this file is where
  *  the state begins, not where the config is read. */
 export interface QuotaSessionState {
-  /** The last window a message was sent to, keyed so the same one is never opened twice. Null
-   *  means it has never happened. */
-  probe: QuotaSessionProbe | null;
+  /** The window a message actually opened, kept so the same one is never opened twice. Null
+   *  means it has never happened, or that the one it opened has since ended. */
+  opened: OpenedWindow | null;
+  /** Failed sends in a row, and when the next attempt is due. A send that **works** is never
+   *  retried; only a failure owes another try, and after `QUOTA_SESSION_MAX_FAILURES` of them
+   *  nothing more is tried until a window reads open. */
+  failures: number;
+  retryAtMs: number | null;
+  /** How the last attempt failed (`exited with 1`), for the line under the service row. */
+  lastFailure: { atMs: number; detail: string } | null;
+  /** True while an attempt is in flight. **The only thing that puts `sending` on the screen**,
+   *  so it is never shown for longer than one attempt takes. */
+  sending: boolean;
   /** Listed time (minutes since midnight) to the day it last fired on. */
   fired: FiredTimes | null;
   /** When a session was last started, for the `sent HH:MM` tail on the service line. */
@@ -37,6 +47,8 @@ export interface QuotaSessionState {
   /** Whether the CLI can be run here at all. Null before the first look; false is said once and
    *  then nothing more is attempted for it. */
   installed: boolean | null;
+  /** True once the line saying it has given up has been written, so it is written once. */
+  saidGaveUp: boolean;
 }
 
 /** The current HEAD and how many commits are still to come. **It is re-read right after a

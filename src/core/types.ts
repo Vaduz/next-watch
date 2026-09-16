@@ -80,6 +80,16 @@ export interface QuotaSessionModeRow {
   nextAtMinutes: number | null;
   /** When a session was last started, for the `sent HH:MM` tail. Null when none has been. */
   sentAtMs: number | null;
+  /** True **only while an attempt is in flight**, so the screen never says `sending` for longer
+   *  than one attempt takes. */
+  sending?: boolean;
+  /** How the last attempt failed, and when. Null when the last one worked or none has been
+   *  made. */
+  lastFailure?: { atMs: number; detail: string } | null;
+  /** When the next attempt is due after a failure. Null when none is owed. */
+  retryAtMs?: number | null;
+  /** True once too many have failed in a row and nothing more is tried until a window opens. */
+  gaveUp?: boolean;
 }
 
 /** One live agent session. */

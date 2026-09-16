@@ -36,8 +36,48 @@ describe('quotaSessionLine', () => {
     },
     {
       want: 'session: auto · next refresh now (window closed, sending)',
-      row: { mode: 'auto', window: { open: false, closesAtMs: null } },
+      row: { mode: 'auto', window: { open: false, closesAtMs: null }, sending: true },
       why: 'automatic with nothing open is the case it acts on',
+    },
+    {
+      // ⚠️ `sending` used to be shown whenever the window was shut, so a CLI that failed every
+      // attempt read as busy sending for ever. It is now shown only while one is in flight.
+      want: 'session: auto · next refresh now (window closed)',
+      row: { mode: 'auto', window: { open: false, closesAtMs: null } },
+      why: 'shut, and nothing in flight at this instant',
+    },
+    {
+      want: 'session: auto · failed 17:08 (exit 1) · retry 17:18',
+      row: {
+        mode: 'auto',
+        window: { open: false, closesAtMs: null },
+        lastFailure: { atMs: at('17:08:00'), detail: 'exited with 1' },
+        retryAtMs: at('17:18:00'),
+      },
+      why: 'a failed attempt says so, and when the next one is due',
+    },
+    {
+      want: 'session: auto · failed 17:08 · no more this window',
+      row: {
+        mode: 'auto',
+        window: { open: false, closesAtMs: null },
+        lastFailure: { atMs: at('17:08:00'), detail: 'killed by SIGTERM (timed out?)' },
+        retryAtMs: null,
+        gaveUp: true,
+      },
+      why: 'after too many in a row there is no next attempt to name',
+    },
+    {
+      want: 'session: manual · failed 09:00 (exit 1) · retry 09:10',
+      row: {
+        mode: 'manual',
+        nextAtMinutes: 840,
+        window: { open: false, closesAtMs: null },
+        sentAtMs: at('09:00:00'),
+        lastFailure: { atMs: at('09:00:00'), detail: 'exited with 1' },
+        retryAtMs: at('09:10:00'),
+      },
+      why: 'a listed time that did not open the window replaces both the next time and the sent tail',
     },
     {
       want: 'session: auto',
@@ -134,6 +174,10 @@ describe('quotaSessionModeRow', () => {
       window: null,
       nextAtMinutes: null,
       sentAtMs: null,
+      sending: false,
+      lastFailure: null,
+      retryAtMs: null,
+      gaveUp: false,
     });
   });
 

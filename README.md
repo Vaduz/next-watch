@@ -141,7 +141,16 @@ one of them is drawn except the last, which waits for `--quota-session`**; with 
 
   It covers **both CLIs**, each decided on its own window, and a key per CLI says something
   different about one of them: `{ claude: { at: [...] }, codex: false }`. A CLI that is not
-  installed is skipped with one line in the log.
+  installed is skipped with one line in the log. Codex is sent
+  `codex exec --skip-git-repo-check "hi"`, because the sandbox is deliberately not a git
+  repository and Codex refuses to run outside one without that flag.
+
+  **One message per window, and retries only after a failure.** A send that works is remembered
+  against the clock, so the window it opened is left alone for its whole five hours however long
+  the usage figures take to agree — they are cached, and a percentage that still rounds to zero
+  is not an empty window. A send that **fails** is tried again ten minutes later, three times,
+  and then nothing more until a window opens; the line under the service row says which
+  (`failed 17:08 (exit 1) · retry 17:18`).
 
   Either way, each row of the **service status** carries a second line saying which mode is on for
   that CLI and what it is waiting for — `session: manual · next refresh 14:00`, or `session: off` —
@@ -470,7 +479,7 @@ and never more often than this:
 | `api.github.com/repos/<repo>/releases/latest`                         | the newest published version      | at most once every ten minutes                                                                         | `tools: false`                         |
 | `claude update`, `codex update` (local processes)                     | installing a release that is out  | at most once per release published upstream                                                            | `tools: { autoUpdate: false }`         |
 | `claude -p "hi"` (a local process, through the CLI's own credentials) | opening a closed five-hour window | at most once per closed window, or once per listed time                                                | `quotaSession: false`, `claude: false` |
-| `codex exec "hi"` (the same, for the other CLI)                       | the same                          | the same                                                                                               | `quotaSession: false`, `codex: false`  |
+| `codex exec --skip-git-repo-check "hi"` (the same, for the other CLI) | the same                          | the same                                                                                               | `quotaSession: false`, `codex: false`  |
 
 The install is the one row where **the watch itself opens no connection**: it runs that CLI's own
 update command and reads its output. Where a CLI fetches its release from is that CLI's own

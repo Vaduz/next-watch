@@ -2,6 +2,43 @@
 
 ## Unreleased
 
+- **Fixed: `codex exec "hi"` never opened a window, and failed every ten minutes for ever.** It
+  exited 1 in a tenth of a second, saying it was not inside a trusted directory and that
+  `--skip-git-repo-check` was not specified. The sandbox is an empty directory under the temp
+  directory — deliberately not a repository, so that no project's instructions are read into the
+  context of a message whose only purpose is to exist — and Codex 0.154.0 refuses to run outside
+  one. The flag is now passed. (Its `Reading additional input from stdin...` is not a second
+  problem: every child is given `'ignore'` for stdin and reaches end of file at once.)
+
+- **Fixed: Claude was sent `hi` several times for the same window.** Four went into one window
+  overnight — 01:26, 01:36, 01:55, 02:05. A window was read as closed when its reset time was in
+  the future and nothing was used, and one `hi` rounds to 0%, so ten minutes after each send the
+  same window read as closed again.
+
+  What a window that is **not running** looks like was measured against both backends rather than
+  assumed, and they differ:
+
+  - **Claude** gives a fixed boundary: a spent window shows a reset time that has passed.
+  - **Codex** gives no boundary at all until something is running. With nothing open it answers
+    `0%` used and a reset **exactly five hours from the moment it was asked**, which moves with
+    the clock — two readings 85 seconds apart came back 85 seconds apart, and one message froze
+    it.
+
+  So the rule is neither the old one nor "a future reset means open", which would have left Codex
+  looking open for ever and never sent to it again. A window is closed when there is no reset
+  time, when it has passed, or when it is a whole window ahead of the moment the figures were
+  **read** (Codex's not-yet-running shape); otherwise it is open, and the usage percentage
+  decides nothing. On top of that, a send that works is remembered against the clock for the five
+  hours it bought, so the figures lagging behind cannot cause a second one.
+
+- **A failed quota session is retried three times and then left alone, and the screen says so.**
+  Retrying is now what failure means rather than what every ten minutes means: a send that worked
+  is never repeated. Three failures ten minutes apart is half an hour of trying, after which one
+  line says `quota: codex failed 3 times, nothing more until a window opens` and nothing is tried
+  until a window is open again, whoever opened it. The line under the service row carries it —
+  `session: auto · failed 17:08 (exit 1) · retry 17:18`, or `· no more this window` — and
+  `sending` is shown only while an attempt is actually in flight, instead of for ever.
+
 - **`tools: { autoUpdate: false }` turns the automatic install off in one line.** Claude Code and
   Codex have kept themselves up to date since the section existed — a watcher that reports a new
   release for days without installing it is only a reminder — but saying "report and install

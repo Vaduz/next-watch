@@ -24,13 +24,47 @@ export function quotaSessionUnder(
   return rows.find(r => r.cli === cli) ?? null;
 }
 
+/** How much of a failure's own words fit. The line has sixty-four columns for everything, and
+ *  the verbatim reason is in the event log either way. */
+const DETAIL_WIDTH = 12;
+
+/** A failure in as few columns as it can be said in. The two that actually happen get a name;
+ *  anything else is cut, because an unknown reason must not decide the width of the line. */
+function shortDetail(detail: string): string {
+  const exited = /exited with (-?\d+)/.exec(detail);
+  if (exited !== null) return `exit ${exited[1]}`;
+  if (detail.includes('timed out')) return 'timed out';
+  return detail.length <= DETAIL_WIDTH ? detail : `${detail.slice(0, DETAIL_WIDTH - 1)}…`;
+}
+
+/** What went wrong last, for either mode.
+ *
+ *  ⚠️ **This is the difference between a watcher that is working and one that is not.** Before
+ *  it, a CLI that failed every attempt showed `sending` for ever, and the only sign of trouble
+ *  was in the event log, scrolled away minutes later.
+ *
+ *  Having given up, the reason is dropped: what the reader needs then is that nothing more will
+ *  be tried, and the reason is in the log in full. */
+function failureDetail(row: QuotaSessionModeRow, clock: WatchClock): string[] {
+  const failure = row.lastFailure ?? null;
+  if (failure === null) return [];
+  const when = clock.hourMinute(failure.atMs);
+  if (row.gaveUp === true) return [`failed ${when}`, 'no more this window'];
+  const next = row.retryAtMs == null ? 'retrying' : `retry ${clock.hourMinute(row.retryAtMs)}`;
+  return [`failed ${when} (${shortDetail(failure.detail)})`, next];
+}
+
 /** What the automatic mode is waiting for. An open window is waiting for it to close, and a
  *  closed one is being opened right now — that is what automatic means. */
 function autoDetail(row: QuotaSessionModeRow, clock: WatchClock): string[] {
   if (row.window === null) return [];
-  if (!row.window.open) return ['next refresh now (window closed, sending)'];
-  const closes = row.window.closesAtMs;
-  return [`next refresh when the window closes${closes === null ? '' : ` (${clock.hourMinute(closes)})`}`];
+  if (row.window.open) {
+    const closes = row.window.closesAtMs;
+    return [`next refresh when the window closes${closes === null ? '' : ` (${clock.hourMinute(closes)})`}`];
+  }
+  if (row.sending === true) return ['next refresh now (window closed, sending)'];
+  const failed = failureDetail(row, clock);
+  return failed.length > 0 ? failed : ['next refresh now (window closed)'];
 }
 
 /** What the scheduled mode is waiting for: the next listed time, and for a few minutes after a
@@ -42,6 +76,11 @@ function autoDetail(row: QuotaSessionModeRow, clock: WatchClock): string[] {
  *  `next refresh 14:00` alone gives no sign that 09:00 happened. */
 function manualDetail(row: QuotaSessionModeRow, nowMs: number, clock: WatchClock): string[] {
   const next = row.nextAtMinutes === null ? [] : [`next refresh ${formatScheduleTime(row.nextAtMinutes)}`];
+  // ⚠️ A pending failure **replaces** the next listed time rather than joining it: three facts
+  // do not fit in sixty-four columns, and a firing that did not open the window is the more
+  // urgent of the two. The next time is written to the event log after every firing anyway.
+  const failed = failureDetail(row, clock);
+  if (failed.length > 0) return failed;
   const recent = row.sentAtMs !== null && nowMs - row.sentAtMs < QUOTA_SESSION_RETRY_MS;
   return recent && row.sentAtMs !== null ? [...next, `sent ${clock.hourMinute(row.sentAtMs)}`] : next;
 }
@@ -67,6 +106,11 @@ export function quotaSessionModeRow(o: {
   installed?: boolean;
   window: { open: boolean; closesAtMs: number | null } | null;
   sentAtMs: number | null;
+  /** True while an attempt is in flight. */
+  sending?: boolean;
+  lastFailure?: { atMs: number; detail: string } | null;
+  retryAtMs?: number | null;
+  gaveUp?: boolean;
   nowMs: number;
   offsetMinutes: number;
 }): QuotaSessionModeRow {
@@ -76,8 +120,38 @@ export function quotaSessionModeRow(o: {
     cli: o.cli,
     mode,
     note: missing ? 'not installed' : null,
-    window: mode === 'off' ? null : o.window,
     nextAtMinutes: mode === 'manual' && o.at !== null ? nextScheduleTime(o.at, o.nowMs, o.offsetMinutes) : null,
-    sentAtMs: mode === 'off' ? null : o.sentAtMs,
+    // A switch that is off carries none of it: the line says `session: off` and nothing else,
+    // and a stale window or a failure from before it was turned off would read as current.
+    ...(mode === 'off' ? OFF : attempt(o)),
+  };
+}
+
+/** What an `off` row carries, which is nothing at all. */
+const OFF = {
+  window: null,
+  sentAtMs: null,
+  sending: false,
+  lastFailure: null,
+  retryAtMs: null,
+  gaveUp: false,
+} as const;
+
+/** What a row that is on carries about the window and the last attempt at opening it. */
+function attempt(o: {
+  window: { open: boolean; closesAtMs: number | null } | null;
+  sentAtMs: number | null;
+  sending?: boolean;
+  lastFailure?: { atMs: number; detail: string } | null;
+  retryAtMs?: number | null;
+  gaveUp?: boolean;
+}): Pick<QuotaSessionModeRow, 'window' | 'sentAtMs' | 'sending' | 'lastFailure' | 'retryAtMs' | 'gaveUp'> {
+  return {
+    window: o.window,
+    sentAtMs: o.sentAtMs,
+    sending: o.sending === true,
+    lastFailure: o.lastFailure ?? null,
+    retryAtMs: o.retryAtMs ?? null,
+    gaveUp: o.gaveUp === true,
   };
 }

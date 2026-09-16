@@ -66,12 +66,3 @@ export function quotaLevel(percent: number): QuotaLevel {
   if (percent > 50) return 'warning';
   return 'success';
 }
-
-/** The record of the last time a usage window was opened. **The key is the window's reset
- *  time**, so the same window is never opened twice; the timestamp only matters when the reset
- *  time could not be read. */
-export interface QuotaSessionProbe {
-  /** The reset time of the window that was opened, or null when unreadable. */
-  resetsAtMs: number | null;
-  atMs: number;
-}

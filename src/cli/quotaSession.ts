@@ -21,17 +21,12 @@
  *  remote is checked, and a schedule whose resolution depended on it would fire an hour late on
  *  a watch with a long interval. Reading the quota costs nothing at that rate — it goes through
  *  the same one-minute cache the panel reads. */
-import { quotaSessionOpen, quotaSessionToStart, sessionWindowOf } from '../core/quota/session.js';
+import { quotaSessionOpen, quotaSessionToStart, sessionFetchedAt, sessionWindowOf } from '../core/quota/session.js';
+import { forgetFailures, sendAndRecord } from './quotaSessionSend.js';
 import { armSchedule, formatScheduleTime, nextScheduleTime, scheduleTick } from '../core/quota/schedule.js';
-import {
-  QUOTA_SESSION_CLIS,
-  QUOTA_SESSION_LABELS,
-  type QuotaSessionCli,
-  type QuotaSessionPlan,
-} from '../core/quota/sessionConfig.js';
-import { quotaSessionModeRow } from '../core/quota/sessionMode.js';
+import { QUOTA_SESSION_LABELS, type QuotaSessionCli, type QuotaSessionPlan } from '../core/quota/sessionConfig.js';
 import { minuteOfDayAt } from '../core/term/index.js';
-import type { QuotaCard, QuotaSessionModeRow } from '../core/types.js';
+import type { QuotaCard } from '../core/types.js';
 import type { QuotaSessionState, WatchState } from '../core/watchState.js';
 import { quotaSessionCommand, startQuotaSession } from './actions/quota.js';
 import { commandInstalled } from '../io/installed.js';
@@ -47,9 +42,21 @@ export interface QuotaSessionScreen {
   clock: WatchClock;
 }
 
-/** How a session is actually started. The real one is `startQuotaSession`; a test passes its
- *  own, because nothing in a test run may reach the network or spend a message. */
-export type SendQuotaSession = (cli: QuotaSessionCli, cwd: string, emit: Emit) => void;
+/** How a session is actually started, and **how it went**. The real one is `startQuotaSession`;
+ *  a test passes its own, because nothing in a test run may reach the network or spend a
+ *  message.
+ *
+ *  ⚠️ The outcome is the point of the return value. A send that works is never retried — the
+ *  window it opened is remembered instead — and only a failure owes another attempt, so the two
+ *  have to be told apart. */
+export type SendQuotaSession = (cli: QuotaSessionCli, cwd: string, emit: Emit) => Promise<QuotaSendResult>;
+
+/** What a send came back with. */
+export interface QuotaSendResult {
+  ok: boolean;
+  /** How it failed (`exited with 1`), for the line under the service row. */
+  detail: string | null;
+}
 
 /** The knobs that are not the watcher's own state: `--dry-run`, the clock, the sender, and
  *  whether a CLI is installed. All of them have the answer the watch itself gives. */
@@ -73,7 +80,18 @@ async function safely<T>(load: () => Promise<T>, fallback: T): Promise<T> {
 function stateFor(state: WatchState, cli: QuotaSessionCli): QuotaSessionState {
   const found = state.quotaSessions[cli];
   if (found !== undefined) return found;
-  const fresh: QuotaSessionState = { probe: null, fired: null, sentAtMs: null, window: null, installed: null };
+  const fresh: QuotaSessionState = {
+    opened: null,
+    failures: 0,
+    retryAtMs: null,
+    lastFailure: null,
+    sending: false,
+    fired: null,
+    sentAtMs: null,
+    window: null,
+    installed: null,
+    saidGaveUp: false,
+  };
   state.quotaSessions[cli] = fresh;
   return fresh;
 }
@@ -108,7 +126,7 @@ export async function maybeStartQuotaSession(
   const {
     dryRun = false,
     nowMs = Date.now(),
-    send = (cli: QuotaSessionCli, cwd: string, e: Emit) => void startQuotaSession(cli, cwd, e),
+    send = (cli: QuotaSessionCli, cwd: string, e: Emit) => startQuotaSession(cli, cwd, e),
     installed = commandInstalled,
   } = options;
   // Not being able to read the quota is the same as any other section failing: carry on.
@@ -132,10 +150,15 @@ export async function maybeStartQuotaSession(
 /** One CLI, one look. */
 function lookAt(plan: QuotaSessionPlan, o: Look): void {
   const own = stateFor(o.state, plan.cli);
-  const window = sessionWindowOf(o.cards, QUOTA_SESSION_LABELS[plan.cli]);
+  const label = QUOTA_SESSION_LABELS[plan.cli];
+  const window = sessionWindowOf(o.cards, label);
+  const fetchedAtMs = sessionFetchedAt(o.cards, label);
+  const open = quotaSessionOpen({ window, nowMs: o.nowMs, fetchedAtMs, opened: own.opened });
   // Null stays null: a card that could not be read and a window that is shut look the same to
   // the reader, and the line under the service row says nothing rather than something wrong.
-  own.window = window === null ? null : { open: quotaSessionOpen(window, o.nowMs), closesAtMs: window.resetsAtMs };
+  own.window = window === null ? null : { open, closesAtMs: own.opened?.resetsAtMs ?? window.resetsAtMs };
+  // A window that is running is the answer to whatever went wrong before, whoever opened it.
+  if (open) forgetFailures(own);
   if (own.installed === null) {
     own.installed = o.installed(plan.cli);
     // ⚠️ Said once and then let go. A machine with only one of the two CLIs is ordinary, and a
@@ -147,25 +170,28 @@ function lookAt(plan: QuotaSessionPlan, o: Look): void {
   else scheduled(plan.cli, plan.at, own, o);
 }
 
-/** Open it whenever it is closed. Two never run at once because the window it sent to is
- *  remembered **before** sending, and the decision refuses a window twice. */
+/** Open it whenever it is closed. Two never run at once: an attempt in flight stops the
+ *  decision, and a send that worked is remembered as a window that is open. */
 function automatic(cli: QuotaSessionCli, own: QuotaSessionState, o: Look): void {
-  const start = quotaSessionToStart(o.cards, own.probe, o.nowMs, QUOTA_SESSION_LABELS[cli]);
+  const start = quotaSessionToStart({
+    cards: o.cards,
+    label: QUOTA_SESSION_LABELS[cli],
+    nowMs: o.nowMs,
+    history: own,
+  });
   if (start === null) return;
   // ⚠️ `--dry-run` is the promise that this run changes nothing, and a message that opens a
-  // usage window is the one thing here that spends something. The probe is still written, so
-  // the line is not repeated every second for as long as the window stays shut.
+  // usage window is the one thing here that spends something. The window is still written down,
+  // so the line is not repeated every second for as long as it stays shut.
   if (o.dryRun) {
-    if (own.probe === null) o.screen.event(o.nowMs, 'info', `(dry-run) would open the ${cli} quota window`);
-    own.probe = start.probe;
+    if (own.opened === null) o.screen.event(o.nowMs, 'info', `(dry-run) would open the ${cli} quota window`);
+    own.opened = start.opened;
     return;
   }
   const said = quotaSessionCommand(cli);
   const label = QUOTA_SESSION_LABELS[cli];
   o.screen.event(o.nowMs, 'prompt', `${label} quota session is closed (${start.why}), opening it with ${said} ...`);
-  own.probe = start.probe;
-  own.sentAtMs = o.nowMs;
-  o.send(cli, o.cwd, o.emit);
+  sendAndRecord(cli, own, o);
 }
 
 /** Open one only at the listed times. */
@@ -202,8 +228,7 @@ function scheduled(cli: QuotaSessionCli, at: readonly number[], own: QuotaSessio
       'prompt',
       `quota: ${cli} ${when} — opening the window with ${quotaSessionCommand(cli)} ...`,
     );
-    own.sentAtMs = o.nowMs;
-    o.send(cli, o.cwd, o.emit);
+    sendAndRecord(cli, own, o);
   }
   sayNext(cli, at, o);
 }
@@ -218,25 +243,4 @@ function sayNext(cli: QuotaSessionCli, at: readonly number[], o: Look): void {
   if (next === null) return;
   const day = next <= minuteOfDayAt(o.nowMs, o.offsetMinutes) ? ' (tomorrow)' : '';
   o.screen.event(o.nowMs, 'info', `quota: ${cli} next scheduled session ${formatScheduleTime(next)}${day}`);
-}
-
-/** The rows drawn under the service section: **one per CLI, always**, because a setting that
- *  spends something is worth knowing about even where it is off. */
-export function quotaSessionRows(config: ResolvedConfig, state: WatchState, nowMs: number): QuotaSessionModeRow[] {
-  const session = config.providers.quotaSession;
-  return QUOTA_SESSION_CLIS.map(cli => {
-    const plan = session?.plans.find(p => p.cli === cli) ?? null;
-    const own = state.quotaSessions[cli];
-    return quotaSessionModeRow({
-      cli,
-      at: plan?.at ?? null,
-      on: plan !== null,
-      // Not looked at yet is not the same as missing, so nothing is said until it has been.
-      installed: own?.installed ?? true,
-      window: own?.window ?? null,
-      sentAtMs: own?.sentAtMs ?? null,
-      nowMs,
-      offsetMinutes: config.timezoneOffsetMinutes,
-    });
-  });
 }
