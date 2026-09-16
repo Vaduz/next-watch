@@ -24,8 +24,9 @@ export type PsColumns = 0 | 1 | 2;
 /** Parse `ps -A -o pid=,ppid=[,pgid=[,sid=]],command=`, which prints no header.
  *
  *  `extra` says how many of the two optional columns were asked for, because a command line is
- *  free to begin with digits (`7zip …`) and counting them would otherwise be a guess. A column
- *  that did not come back as a number is left absent rather than filled with a wrong one. */
+ *  free to begin with digits (`7zip …`) and counting them would otherwise be a guess. A row whose
+ *  asked-for columns did not come back as numbers is skipped, the same as one with no pid: a
+ *  guessed session id is worse than a missing row, because it decides what gets stopped. */
 export function parsePsTable(stdout: string, extra: PsColumns = 0): ProcInfo[] {
   const middle = '\\s+(\\d+)'.repeat(extra);
   const row = new RegExp(`^\\s*(\\d+)\\s+(\\d+)${middle}\\s+(\\S.*?)\\s*$`);

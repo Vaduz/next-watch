@@ -195,6 +195,14 @@ describe('ChildServer', () => {
     // And the log says so, so that a reader wondering why the tree is still there can see it.
     expect(events.some(e => e.startsWith(`info dev: leaving pid ${job} (own session: `))).toBe(true);
     expect(events.some(e => e.includes(`leaving pid ${jobchild}`))).toBe(false);
+
+    // ⚠️ The surviving job holds the stopped server's stderr pipe open, so the server child's
+    // `close` arrives whenever the job ends — which is now routinely long after the stop. It
+    // must not be reported as a crash of a server nobody is running any more.
+    process.kill(job, 'SIGKILL');
+    process.kill(jobchild, 'SIGKILL');
+    await sleep(300);
+    expect(events.filter(e => e.startsWith('error'))).toEqual([]);
   }, 20_000);
 
   it('reports a command that is not there rather than throwing', async () => {
