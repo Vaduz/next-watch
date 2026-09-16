@@ -38,7 +38,6 @@ import { SaidOnce, initialState, panelDue, type WatchState } from '../core/watch
 import { type Args } from './args.js';
 import {
   maybeAutoUpdate,
-  maybeStartQuotaSession,
   offerSshKey,
   reportLocalChanges,
   reportSshAgentChanges,
@@ -260,10 +259,10 @@ export async function startWatch(input: NextWatchConfig, args: Args): Promise<nu
     await reportLocalChanges(config, state, screen);
     await reportVersionChanges(config, state, screen);
     await reportSshAgentChanges(config, state, screen);
-    // The two things the watcher does on its own initiative. Both start a child and neither
-    // waits for it, so the git watch keeps its rhythm.
+    // What the watcher does on its own initiative. It starts a child and does not wait for it,
+    // so the git watch keeps its rhythm. The other one, opening a quota window, runs on the
+    // sample loop below instead: it is a clock, and a clock must not tick at `--interval`.
     maybeAutoUpdate(config, state, screen, start);
-    await maybeStartQuotaSession(config, state, screen, emit);
     state.repo = await repoState(config);
     // A pull always shows a panel, so what moved sits next to the report of what arrived.
     if (
@@ -273,7 +272,7 @@ export async function startWatch(input: NextWatchConfig, args: Args): Promise<nu
     ) {
       await showPanel(config, state, screen, args, screen.live);
     }
-    await waitNext(config, args, state, screen, draw);
+    await waitNext(config, args, state, screen, draw, emit);
   }
 }
 

@@ -12,6 +12,7 @@ import type {
   AccessPane,
   AgentSessionRow,
   QuotaCard,
+  QuotaSessionModeRow,
   ServiceCard,
   SshAgentCard,
   ToolVersionRow,
@@ -82,6 +83,8 @@ export async function collectWatchPanel(o: {
   versions: readonly ToolVersionRow[];
   /** The ssh-agent from the last read, null before the first. */
   ssh: SshAgentCard | null;
+  /** How the quota-opening session is set up per CLI, drawn under the service rows. */
+  quotaSessions: readonly QuotaSessionModeRow[];
 }): Promise<WatchPanel> {
   const { config } = o;
   const [quotas, services] = await Promise.all([
@@ -104,6 +107,7 @@ export async function collectWatchPanel(o: {
     // Null when nothing reads them, so the section is absent rather than saying there are none.
     sessions: config.providers.sessions === undefined ? null : o.local.sessions,
     services,
+    quotaSessions: o.quotaSessions,
     versions: o.versions,
     ssh: o.ssh,
     selfVersion: packageVersion(),
@@ -142,6 +146,9 @@ export function panelKey(p: WatchPanel): string {
     p.quotas.map(q => [q.label, q.plan, q.error, q.stale, q.windows.map(w => [w.name, Math.round(w.usedPercent)])]),
     p.sessions?.map(s => [s.name, s.tree, s.status, s.model, s.contextTokens]) ?? null,
     p.services.map(s => [s.name, s.indicator, s.description, [...s.degraded], s.error]),
+    // The session line under a service row changes without the service row changing, so its
+    // mode and the time it is waiting for are part of the key.
+    p.quotaSessions?.map(q => [q.cli, q.mode, q.nextAtMinutes, q.window?.open ?? null]) ?? null,
     p.versions.map(v => [v.name, v.version, v.error]),
     p.ssh === null ? null : [p.ssh.state, p.ssh.keys, p.ssh.error],
   ]);

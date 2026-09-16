@@ -79,6 +79,20 @@ export function hourMinuteAt(ms: number, offsetMinutes: number): string {
   return clockAt(ms, offsetMinutes).slice(0, 5);
 }
 
+/** Minutes since midnight at a fixed offset, so a configured `09:00` can be compared with the
+ *  clock without either of them becoming a `Date` in the host's own zone. */
+export function minuteOfDayAt(ms: number, offsetMinutes: number): number {
+  const at = new Date(ms + offsetMinutes * 60 * 1000);
+  return at.getUTCHours() * 60 + at.getUTCMinutes();
+}
+
+/** `YYYY-MM-DD` at a fixed offset. Something that happens **once a day** needs a name for the
+ *  day the watcher's clock is showing, and the host's own date is the wrong one wherever
+ *  `timezoneOffsetMinutes` differs from it. */
+export function dayAt(ms: number, offsetMinutes: number): string {
+  return new Date(ms + offsetMinutes * 60 * 1000).toISOString().slice(0, 10);
+}
+
 /** Render a percentage as a bar in eighth-of-a-cell steps (`██▌`). */
 export function bar(percent: number, width: number): string {
   const clamped = Math.max(0, Math.min(100, percent));

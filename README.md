@@ -60,34 +60,39 @@ directory's name), `root` is the working directory, `branch` is `main`, the remo
 ## What you see, and what you can do
 
 One screen, redrawn in place. This is a real one, watching a throwaway project with one described
-server and two of the optional sections turned on — the agent sessions and the service status:
+server and three of the optional sections turned on — the agent sessions, the service status, and
+the quota session on a schedule:
 
 ```
-╭─ next-watch 0.3.0  01:42:42  up 18s ───────────────────────────────────────╮
-│ REPO     /tmp/nw-shot/site  main 6342d5c  in sync with origin/main         │
-│          nothing pulled during this watch · next git check 3583s           │
+╭─ next-watch 0.3.0  12:03:49  up 16s ───────────────────────────────────────╮
+│ REPO     /tmp/nw-shot/site  main 2bc45b3  in sync with origin/main         │
+│          nothing pulled during this watch · next git check 3585s           │
 │                                                                            │
-│    SERVER  STATE  URL                    OWNER        MODE  UPTIME         │
-│    web     up     http://localhost:3400  pid 2833504  bun      17s         │
+│    SERVER  STATE  URL                    OWNER       MODE  UPTIME          │
+│    web     up     http://localhost:3400  pid 505877  bun      15s          │
 │                                                                            │
-│ SESSION  TREE        AGENT   STATUS  MODEL      CONTEXT  IDLE    VER       │
+│ SESSION  TREE        AGENT   STATUS  MODEL      CONTEXT  IDLE   VER        │
 │   What does the dev script in package.json…                                │
-│          site        codex   idle    -              15k     17s  0.154.0   │
-│   site-66                                                                  │
-│          site        claude  idle    opus-5         39k      1m  2.1.272   │
+│          site        codex   idle    -              15k     5m  0.154.0    │
+│   site-83                                                                  │
+│          site        claude  idle    opus-5         31k     5m  2.1.273    │
 │                                                                            │
 │    SERVICE  Claude  ●  All Systems Operational                             │
+│             session: manual · next refresh 16:00                           │
 │             OpenAI  ●  All Systems Operational                             │
 ├─ event log ────────────────────────────────────────────────────────────────┤
-│ 01:42:24 ○ web: bun run dev                                                │
-│ 01:42:24 ○ web is listening on http://localhost:3400                       │
-│ 01:42:24 ◆ server web is up at http://localhost:3400 (bun)                 │
+│ 12:03:33 ◎ next-watch started (git every 3600s · keys on)                  │
+│ 12:03:34 ○ web: bun run dev                                                │
+│ 12:03:34 ○ web is listening on http://localhost:3400                       │
+│ 12:03:34 ◆ server web is up at http://localhost:3400 (bun)                 │
+│ 12:03:35 · quota: next scheduled session 16:00                             │
 ├─ web access  /tmp/nw-shot/site/log/web.txt ────────────────────────────────┤
-│ 01:42:34  GET                404  11ms  /missing                           │
-│ 01:42:34  GET                200  11ms  /                                  │
+│           $ node server.mjs                                                │
+│ 12:03:38  GET                404  12ms  /missing                           │
+│ 12:03:39  GET                200  11ms  /                                  │
 ╰────────────────────────────────────────────────────────────────────────────╯
 
-  ⠏ Tab select · up/down scroll · (h)elp · (q)uit
+  ⠸ Tab select · up/down scroll · (h)elp · (q)uit
 ```
 
 What the sections are. The first five are the repository itself and are always drawn:
@@ -117,7 +122,19 @@ one of them is drawn except the last, which waits for `--quota-session`**; with 
 - **ssh-agent** — whether a key is loaded, because without one a pull over SSH simply fails.
 - **Opening a closed quota window** — the one section that _spends_ something: it starts a session
   of its own (`claude -p`) in an empty sandbox directory. **Off unless asked for**, with
-  `--quota-session` or `providers.quotaSession`.
+  `--quota-session` or `providers.quotaSession`. It works two ways:
+  - **automatic** (`quotaSession: true`) — open a window whenever one is found closed, which keeps
+    one running around the clock.
+  - **on a schedule** (`quotaSession: { at: ['09:00', '14:00'] }`, or `--quota-session-at`) — open
+    one only at those times, read in the watch's own clock (`timezoneOffsetMinutes`). **`at` turns
+    the automatic mode off**: between the listed times a closed window stays closed. That is the
+    point of it — a window opened at 04:00 is spent by the time the day starts. Nothing is made up
+    for a time that passed while the watch was not running, each listed time fires at most once a
+    day, and a time that comes round while a window is already open sends nothing and says so.
+
+  Either way the Claude row of the **service status** carries a second line saying which mode is on
+  and what it is waiting for (`session: manual · next refresh 14:00`), so the setting can be read
+  off the screen instead of out of the config file.
 
 On a terminal the screen is operable, not only readable. Tab moves a cursor between the things on
 it, and a verb runs on whatever the cursor is on:
@@ -302,6 +319,9 @@ export default {
     // your repository, so the message costs one word instead of pulling a whole
     // project's instructions into a context.
     // quotaSession: true,
+    // Or only at these times, in this watch's own clock. Listing them turns
+    // the "whenever it is found closed" behaviour off.
+    // quotaSession: { at: ['06:00', '11:00', '16:00', '21:00'] },
     // quotaSession: { cwd: '/tmp/my-site-sandbox' },  // where it runs
   },
 };
@@ -348,31 +368,34 @@ next-watch [options]
 watch a remote branch, pull it, and restart only what needs restarting
 
 Options:
-      --version        Show version number                             [boolean]
-      --config         path to the config file
+      --version           Show version number                          [boolean]
+      --config            path to the config file
                                      [string] [default: "next-watch.config.mjs"]
-      --interval       how often to check git (seconds)   [number] [default: 60]
-      --panel          how often to redraw the status panel (seconds, 0 to hide)
-                                                         [number] [default: 600]
-      --sample         how often to poll local state (seconds)
+      --interval          how often to check git (seconds)[number] [default: 60]
+      --panel             how often to redraw the status panel (seconds, 0 to
+                          hide)                          [number] [default: 600]
+      --sample            how often to poll local state (seconds)
                                                            [number] [default: 1]
-      --log            lines in the event log pane (default: as many as the
-                       terminal fits, 0 to hide)                        [number]
-      --access         lines in each access log pane (default: auto, 0 to hide)
-                                                                        [number]
-      --start          run this npm script as a server (repeatable; needs no
-                       config file)                        [array] [default: []]
-      --build          npm script that must pass before a --start server is
-                       stopped for a restart                            [string]
-      --quota-session  with no config file, allow the session that opens a
-                       closed quota window            [boolean] [default: false]
-      --once           check once and exit            [boolean] [default: false]
-      --dry-run        report what would be pulled without pulling
+      --log               lines in the event log pane (default: as many as the
+                          terminal fits, 0 to hide)                     [number]
+      --access            lines in each access log pane (default: auto, 0 to
+                          hide)                                         [number]
+      --start             run this npm script as a server (repeatable; needs no
+                          config file)                     [array] [default: []]
+      --build             npm script that must pass before a --start server is
+                          stopped for a restart                         [string]
+      --quota-session     with no config file, allow the session that opens a
+                          closed quota window         [boolean] [default: false]
+      --quota-session-at  open the quota window only at these times
+                          (HH:MM,HH:MM); implies --quota-session
+                                                           [array] [default: []]
+      --once              check once and exit         [boolean] [default: false]
+      --dry-run           report what would be pulled without pulling
                                                       [boolean] [default: false]
-      --restart        restart after pulling (--no-restart to pull only)
+      --restart           restart after pulling (--no-restart to pull only)
                                                        [boolean] [default: true]
-  -h, --help           Show help                                       [boolean]
-  -v, --verbose        say more about what is happening                [boolean]
+  -h, --help              Show help                                    [boolean]
+  -v, --verbose           say more about what is happening             [boolean]
 ```
 
 A server named by `--start` is started **when the watch starts**, which only the watching run

@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+- **The quota session can run on a schedule instead of whenever the window is closed.**
+  `providers.quotaSession` now takes `{ at: ['06:00', '11:00', '16:00', '21:00'] }`, read in the
+  watch's own clock (`timezoneOffsetMinutes`), and `--quota-session-at HH:MM,HH:MM` does the same
+  for a run with no config file. **`at` turns the automatic mode off**: between the listed times a
+  closed window stays closed, which is the point — a window opened at 04:00 is spent by the time
+  the day starts.
+
+  - Nothing is made up for a time that passed while the watch was not running, each listed time
+    fires **at most once a day**, and a time that comes round while a window is already open sends
+    nothing and logs one line saying until when it is open.
+  - The decision is a pure function of the times, the offset, what has already fired and whether
+    the window is open (`core/quota/schedule.ts`); the clock and the spawn stay in the layers that
+    are allowed to have them.
+  - It is now looked at on the **one-second sample** rather than on the git interval. `--interval`
+    is how often the remote is checked, and a schedule whose resolution depended on it would have
+    fired an hour late for anyone who checks git hourly. It costs nothing: the quota is read
+    through the same one-minute cache the panel reads.
+
+- **Each service row says how this machine opens that CLI's window.** Under the Claude row of the
+  service status: `session: auto · next refresh when the window closes (13:12)`,
+  `session: manual · next refresh 14:00`, or `session: off`. The setting spends something, so it
+  is worth being able to read it off the screen rather than out of the config file.
+
+- **Fixed: `--dry-run` sent the quota-opening message.** A dry run is the promise that the run
+  changes nothing, and this is the one thing in the watcher that spends something. It now says
+  what it would have done and sends nothing.
+
 - **The `(h)elp` text is written to 80 columns.** Its widest line was 91, so on an 80-column
   terminal the help wrapped inside the frame and cost rows, and `--help` wrapped it again after
   indenting it. The wording is unchanged where it fitted and split across two lines where it did

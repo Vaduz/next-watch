@@ -1,6 +1,6 @@
 /** Assemble the body sections and the log panes into **one screen**.
  *
- *  The sections themselves are `blocks.ts` and `lines.ts`, the panes are `panes.ts`, and the
+ *  The sections themselves are `blocks.ts`, `services.ts` and `lines.ts`, the panes are `panes.ts`, and the
  *  row allocation is `layout.ts`. What lives here is the order they go in and the decision to
  *  fit them into the terminal's height.
  *
@@ -20,7 +20,8 @@ import {
   type WatchView,
 } from './index.js';
 import { innerWidth, paneBudget } from './layout.js';
-import { quotaBlock, serverBlock, serviceBlock, sessionBlock, taskBlock } from './blocks.js';
+import { quotaBlock, serverBlock, sessionBlock, taskBlock } from './blocks.js';
+import { serviceBlock } from './services.js';
 import { repoLines, sshLine, versionLine } from './lines.js';
 import { accessGroups, accessPane, accessTitle, eventGroups, eventPane, fitGroups, paneTitle } from './panes.js';
 
@@ -61,7 +62,7 @@ function panelBody(p: WatchPanel, paint: Paint, layout: WatchLayout, view: Watch
     taskBlock(p, paint, view),
     quotaBlock(p, paint, layout, clock),
     sessionBlock(p, paint, view),
-    serviceBlock(p, paint, layout, view),
+    serviceBlock(p, paint, layout, view, clock),
     // On a short terminal the bottom goes first (see `clipBody`), and this is what can go.
     versionLine(p, paint, view),
   ];

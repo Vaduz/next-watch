@@ -1,0 +1,214 @@
+// What the watch actually does with the decision: arming the schedule once, writing back what
+// has fired, saying what it saw, and honouring `--dry-run`. The decision itself is a table in
+// `core/quota/schedule.test.ts`; this is the glue around it.
+//
+// Nothing here reaches the network or spends a message: the quota reader and the sender are both
+// given to the function.
+import { describe, expect, it } from 'bun:test';
+import { maybeStartQuotaSession, quotaSessionRows, type QuotaSessionScreen } from './quotaSession.js';
+import { initialState, type WatchState } from '../core/watchState.js';
+import { clockWithOffset } from '../core/view/index.js';
+import { resolveConfig, type ResolvedConfig } from '../config.js';
+import type { Mark } from '../core/term/index.js';
+import type { QuotaCard } from '../core/types.js';
+
+/** JST, which every time below is written in. */
+const JST = 9 * 60;
+const at = (day: string, time: string): number => Date.parse(`${day}T${time}+09:00`);
+
+/** A Claude card whose five-hour window is open until `closes`, or closed when that is null. */
+const cards = (closes: number | null): QuotaCard[] => [
+  {
+    label: 'Claude',
+    plan: 'Max 5x',
+    windows: [{ name: '5h', usedPercent: closes === null ? 0 : 26, resetsAtMs: closes }],
+    error: null,
+    fetchedAtMs: at('2026-09-16', '05:00:00'),
+    stale: false,
+  },
+];
+
+/** The screen, remembering what it was told rather than drawing it. */
+function recorder(): QuotaSessionScreen & { said: string[] } {
+  const said: string[] = [];
+  return {
+    said,
+    clock: clockWithOffset(JST),
+    event: (_atMs: number, _mark: Mark, text: string) => {
+      said.push(text);
+    },
+  };
+}
+
+function config(o: { at?: string[]; on?: boolean; read: () => Promise<QuotaCard[]> }): ResolvedConfig {
+  const base = resolveConfig({
+    appName: 'site',
+    root: '/tmp/next-watch-test',
+    timezoneOffsetMinutes: JST,
+    pull: { blocked: [] },
+    servers: [],
+    providers: { quotaSession: (o.on ?? true) && (o.at === undefined ? true : { at: o.at }) },
+  });
+  const session = base.providers.quotaSession;
+  return {
+    ...base,
+    // The reader is the one thing a test must not keep: it would go to the usage endpoint.
+    providers: { ...base.providers, quotaSession: session === null ? null : { ...session, read: o.read } },
+  };
+}
+
+/** One look at the clock, with the sends it made. */
+async function look(
+  cfg: ResolvedConfig,
+  state: WatchState,
+  screen: QuotaSessionScreen,
+  o: { now: string; day?: string; dryRun?: boolean },
+): Promise<string[]> {
+  const sent: string[] = [];
+  await maybeStartQuotaSession(cfg, state, screen, () => undefined, {
+    nowMs: at(o.day ?? '2026-09-16', o.now),
+    dryRun: o.dryRun ?? false,
+    send: cwd => sent.push(cwd),
+  });
+  return sent;
+}
+
+const freshState = (): WatchState => initialState('a'.repeat(40), at('2026-09-16', '05:00:00'));
+
+describe('maybeStartQuotaSession, on a schedule', () => {
+  const closed = (): ResolvedConfig => config({ at: ['09:00', '14:00'], read: () => Promise.resolve(cards(null)) });
+
+  it('does nothing before a listed time, and says when the next one is', async () => {
+    const screen = recorder();
+    const state = freshState();
+
+    expect(await look(closed(), state, screen, { now: '08:00:00' })).toEqual([]);
+    expect(screen.said).toEqual(['quota: next scheduled session 09:00']);
+  });
+
+  it('makes up nothing for the times that passed before it started', async () => {
+    const screen = recorder();
+    const state = freshState();
+
+    expect(await look(closed(), state, screen, { now: '15:00:00' })).toEqual([]);
+    // Both of today's times are behind, so the next one is tomorrow morning's — and the line
+    // says which day, or a schedule with one time a day would read as having fired for nothing.
+    expect(screen.said).toEqual(['quota: next scheduled session 09:00 (tomorrow)']);
+  });
+
+  it('opens the window at the listed time, once, and says so', async () => {
+    const screen = recorder();
+    const state = freshState();
+    const cfg = closed();
+
+    await look(cfg, state, screen, { now: '08:59:00' });
+    const sent = await look(cfg, state, screen, { now: '09:00:04' });
+
+    expect(sent).toHaveLength(1);
+    expect(screen.said).toEqual([
+      'quota: next scheduled session 09:00',
+      'quota: 09:00 — opening the window with claude -p "hi" ...',
+      'quota: next scheduled session 14:00',
+    ]);
+    // A second look in the same minute sends nothing more.
+    expect(await look(cfg, state, screen, { now: '09:00:05' })).toEqual([]);
+  });
+
+  it('fires the same time again the next day', async () => {
+    const screen = recorder();
+    const state = freshState();
+    const cfg = closed();
+
+    await look(cfg, state, screen, { now: '09:00:00' });
+    expect(await look(cfg, state, screen, { day: '2026-09-17', now: '09:00:00' })).toHaveLength(1);
+  });
+
+  it('sends nothing while a window is open, and says until when', async () => {
+    const screen = recorder();
+    const open = config({
+      at: ['09:00'],
+      read: () => Promise.resolve(cards(at('2026-09-16', '13:12:00'))),
+    });
+
+    const sent = await look(open, freshState(), screen, { now: '09:00:02' });
+
+    expect(sent).toEqual([]);
+    expect(screen.said).toContain('quota: 09:00 — window already open until 13:12, nothing sent');
+  });
+
+  it('sends nothing under --dry-run, and still marks the time as done', async () => {
+    const screen = recorder();
+    const state = freshState();
+    const cfg = closed();
+
+    expect(await look(cfg, state, screen, { now: '09:00:00', dryRun: true })).toEqual([]);
+    expect(screen.said).toContain('(dry-run) would open the Claude quota window for 09:00');
+    // Done is done: dropping the dry-run does not make it fire for the same time.
+    expect(await look(cfg, state, screen, { now: '09:01:00' })).toEqual([]);
+  });
+
+  it('carries on when the quota cannot be read at all', async () => {
+    const screen = recorder();
+    const cfg = config({ at: ['09:00'], read: () => Promise.reject(new Error('no credentials')) });
+
+    expect(await look(cfg, freshState(), screen, { now: '09:00:00' })).toEqual([]);
+    expect(screen.said).toEqual([]);
+  });
+});
+
+describe('maybeStartQuotaSession, automatic', () => {
+  const auto = (closes: number | null): ResolvedConfig => config({ read: () => Promise.resolve(cards(closes)) });
+
+  it('opens a closed window whenever it finds one', async () => {
+    const screen = recorder();
+
+    expect(await look(auto(null), freshState(), screen, { now: '03:00:00' })).toHaveLength(1);
+    expect(screen.said[0]).toContain('Claude quota session is closed');
+  });
+
+  it('leaves an open one alone', async () => {
+    const screen = recorder();
+
+    expect(await look(auto(at('2026-09-16', '13:12:00')), freshState(), screen, { now: '09:00:00' })).toEqual([]);
+    expect(screen.said).toEqual([]);
+  });
+
+  // ⚠️ This was a real gap: `--dry-run` promises the run changes nothing, and this is the one
+  // thing here that spends something.
+  it('sends nothing under --dry-run', async () => {
+    const screen = recorder();
+
+    expect(await look(auto(null), freshState(), screen, { now: '03:00:00', dryRun: true })).toEqual([]);
+    expect(screen.said).toEqual(['(dry-run) would open the Claude quota window']);
+  });
+});
+
+describe('quotaSessionRows', () => {
+  const now = at('2026-09-16', '09:02:00');
+
+  it('says off when nothing is switched on', () => {
+    const cfg = config({ on: false, read: () => Promise.resolve([]) });
+
+    expect(quotaSessionRows(cfg, freshState(), now)).toEqual([
+      { cli: 'claude', mode: 'off', window: null, nextAtMinutes: null, sentAtMs: null },
+    ]);
+  });
+
+  it('carries what the last look saw, so the line needs no quota section', async () => {
+    const screen = recorder();
+    const state = freshState();
+    const cfg = config({ at: ['09:00', '14:00'], read: () => Promise.resolve(cards(at('2026-09-16', '13:12:00'))) });
+
+    await look(cfg, state, screen, { now: '09:02:00' });
+
+    expect(quotaSessionRows(cfg, state, now)).toEqual([
+      {
+        cli: 'claude',
+        mode: 'manual',
+        window: { open: true, closesAtMs: at('2026-09-16', '13:12:00') },
+        nextAtMinutes: 840,
+        sentAtMs: null,
+      },
+    ]);
+  });
+});

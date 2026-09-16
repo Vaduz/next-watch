@@ -9,6 +9,7 @@
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { asRecord } from '../core/util.js';
+import { parseScheduleTimes } from '../core/quota/schedule.js';
 import type { NextWatchConfig } from '../config.js';
 
 /** Load the config module and check that it exported something usable. The message names the
@@ -28,7 +29,19 @@ export async function loadConfig(file: string): Promise<NextWatchConfig> {
   if (!Array.isArray(shape.servers)) throw new Error(`${resolved}: servers is required`);
   if (asRecord(shape.pull) === null) throw new Error(`${resolved}: pull is required`);
   for (const entry of shape.servers as unknown[]) checkServer(entry, resolved);
+  checkQuotaSession(shape.providers, resolved);
   return config as NextWatchConfig;
+}
+
+/** Check the schedule while the file's path is still in hand.
+ *
+ *  `buildProviders` checks it too, but from there the only name it can give is the key. A
+ *  mistyped time is a typing mistake, and the answer to one is the file it is in. */
+function checkQuotaSession(providers: unknown, resolved: string): void {
+  const session = asRecord(asRecord(providers)?.quotaSession);
+  if (session?.at === undefined) return;
+  if (!Array.isArray(session.at)) throw new Error(`${resolved}: providers.quotaSession.at must be an array of times`);
+  parseScheduleTimes(session.at as unknown[], resolved);
 }
 
 /** What is wrong with one `servers` entry, or null when nothing is.

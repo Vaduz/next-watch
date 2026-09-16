@@ -61,6 +61,25 @@ export interface QuotaCard {
   stale: boolean;
 }
 
+/** **How the watcher opens a CLI's five-hour window**, as the screen says it under that CLI's
+ *  service row. One of these per CLI the watcher can open a session for.
+ *
+ *  It is a row of its own rather than a field on `ServiceCard`, because a service card is what a
+ *  status page said and this is what this machine is configured to do. */
+export interface QuotaSessionModeRow {
+  /** The CLI it belongs to (`claude`), which is what puts it under the right service row. */
+  cli: string;
+  /** `auto` opens the window whenever it is found closed; `manual` only at the listed times;
+   *  `off` means the watcher sends nothing for this CLI. */
+  mode: 'auto' | 'manual' | 'off';
+  /** The five-hour window as the last read saw it. Null before the first read. */
+  window: { open: boolean; closesAtMs: number | null } | null;
+  /** The next listed time, in minutes since midnight. Null outside the scheduled mode. */
+  nextAtMinutes: number | null;
+  /** When a session was last started, for the `sent HH:MM` tail. Null when none has been. */
+  sentAtMs: number | null;
+}
+
 /** One live agent session. */
 export interface AgentSessionRow {
   /** Process id. Not displayed, but it is **the key that points at the same session** for as
@@ -192,6 +211,9 @@ export interface WatchPanel {
    *  which is worth a row saying so. */
   sessions: readonly AgentSessionRow[] | null;
   services: readonly ServiceCard[];
+  /** How the quota-opening session is set up per CLI, drawn under the matching service row.
+   *  Optional because a host may build a panel itself; absent draws no such line. */
+  quotaSessions?: readonly QuotaSessionModeRow[];
   /** Versions of the CLIs installed locally. */
   versions: readonly ToolVersionRow[];
   /** **next-watch's own version**, for the frame's title — not one of `versions`, which are

@@ -54,6 +54,21 @@ describe('buildProviders', () => {
     expect(build({ quotaSession: { cwd: '/tmp/elsewhere' } }).quotaSession?.cwd).toBe('/tmp/elsewhere');
   });
 
+  it('reads the schedule into minutes, and leaves the automatic mode as null', () => {
+    expect(build({ quotaSession: true }).quotaSession?.at).toBeNull();
+    // Sorted, whatever order they were written in, so "the next one" is arithmetic.
+    expect(build({ quotaSession: { at: ['14:00', '06:00'] } }).quotaSession?.at).toEqual([360, 840]);
+    // A schedule with no `cwd` still gets the sandbox, rather than running where the watch does.
+    expect(build({ quotaSession: { at: ['09:00'] } }).quotaSession?.cwd).toBe(join(tmpdir(), 'site'));
+  });
+
+  it('refuses a time it cannot read, naming where it came from', () => {
+    expect(() => build({ quotaSession: { at: ['9:00'] } })).toThrow('providers.quotaSession');
+    expect(() =>
+      buildProviders({ appName: 'site', providers: { quotaSession: { at: [] } }, where: 'site.mjs' }),
+    ).toThrow('site.mjs');
+  });
+
   it('can open the quota window without drawing the quota section', () => {
     // The two read the same figures through the same cache, so one does not imply the other.
     const p = build({ quotaSession: true });
@@ -67,28 +82,47 @@ describe('buildProviders', () => {
 // only looks and the one that spends: everything is on, and only `quotaSession` waits to be
 // asked for.
 describe('zeroConfigProviders', () => {
-  const cases: [name: string, quotaSession: boolean, expected: WatchProviders][] = [
+  const cases: [name: string, flags: Parameters<typeof zeroConfigProviders>[0], expected: WatchProviders][] = [
     [
       'every section that only looks is on, and the one that spends is not',
-      false,
+      { quotaSession: false, quotaSessionAt: [] },
       { agentSessions: true, quota: true, quotaSession: false, services: true, tools: true, sshAgent: true },
     ],
     [
       'the quota session, once it has been asked for',
-      true,
+      { quotaSession: true, quotaSessionAt: [] },
       { agentSessions: true, quota: true, quotaSession: true, services: true, tools: true, sshAgent: true },
+    ],
+    [
+      // Naming the times is the asking, so `--quota-session` is not needed beside them.
+      'times given on their own switch it on, on the schedule',
+      { quotaSession: false, quotaSessionAt: ['09:00', '14:00'] },
+      {
+        agentSessions: true,
+        quota: true,
+        quotaSession: { at: ['09:00', '14:00'] },
+        services: true,
+        tools: true,
+        sshAgent: true,
+      },
     ],
   ];
 
-  for (const [name, quotaSession, expected] of cases) {
+  for (const [name, flags, expected] of cases) {
     it(name, () => {
-      expect(zeroConfigProviders({ quotaSession })).toEqual(expected);
+      expect(zeroConfigProviders(flags)).toEqual(expected);
     });
   }
 
   it('turns into the readers the loop wants, sandbox and all', () => {
-    const off = buildProviders({ appName: 'site', providers: zeroConfigProviders({ quotaSession: false }) });
-    const on = buildProviders({ appName: 'site', providers: zeroConfigProviders({ quotaSession: true }) });
+    const off = buildProviders({
+      appName: 'site',
+      providers: zeroConfigProviders({ quotaSession: false, quotaSessionAt: [] }),
+    });
+    const on = buildProviders({
+      appName: 'site',
+      providers: zeroConfigProviders({ quotaSession: true, quotaSessionAt: [] }),
+    });
 
     expect(off.sessions).toBeTypeOf('function');
     expect(off.quotas).toBeTypeOf('function');
@@ -103,7 +137,10 @@ describe('zeroConfigProviders', () => {
   it('keeps the documented default for installing new CLI releases', () => {
     // `tools` is unchanged by the absence of a config file: it reports and installs, as the
     // README says it does. The opt-in one is the session, not the update.
-    const p = buildProviders({ appName: 'site', providers: zeroConfigProviders({ quotaSession: false }) });
+    const p = buildProviders({
+      appName: 'site',
+      providers: zeroConfigProviders({ quotaSession: false, quotaSessionAt: [] }),
+    });
 
     expect(p.autoUpdate).toEqual(['claude', 'codex']);
   });

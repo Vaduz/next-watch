@@ -7,17 +7,16 @@
  *  The version, ssh-agent and quota readers are optional: a host that switched none of them on
  *  simply has those sections absent. */
 import { sleep } from '../core/util.js';
-import { type QuotaCard, type SshAgentCard, type ToolVersionRow, type WatchPanel } from '../core/types.js';
+import { type SshAgentCard, type ToolVersionRow, type WatchPanel } from '../core/types.js';
 import { type WatchLayout } from '../core/view/index.js';
 import { renderWatchPanel } from '../core/view/panel.js';
 import { nextSelection, type WatchState } from '../core/watchState.js';
 import { collectWatchPanel, localSnapshot, panelKey } from './panel.js';
+import { maybeStartQuotaSession, quotaSessionRows } from './quotaSession.js';
 import { visibleFlash } from '../core/watchInteraction.js';
 import { toolsToAutoUpdate } from '../core/toolVersionView.js';
-import { quotaSessionToStart } from '../core/quota/session.js';
 import { sshAgentNeedsKey } from '../core/sshAgentView.js';
 import { toolTarget } from '../core/watchTargets/targets.js';
-import { startQuotaSession } from './actions/quota.js';
 import { addSshKey } from './actions/tools.js';
 import type { ActionContext, Emit } from './actions/stream.js';
 import type { Start } from './terminal.js';
@@ -29,6 +28,8 @@ import type { ResolvedConfig } from '../config.js';
 /** Only the arguments the reporting reads. */
 export interface ReportArgs {
   interval: number;
+  /** Whether this run promises to change nothing, which the quota session has to honour. */
+  dryRun: boolean;
   sample: number;
   panel: number;
   once: boolean;
@@ -116,34 +117,6 @@ export function maybeAutoUpdate(config: ResolvedConfig, state: WatchState, scree
   start(toolTarget(row), 'update');
 }
 
-/** Open a closed five-hour quota window.
- *
- *  A window opens with its first message and closes five hours later, so time spent with it
- *  closed comes straight off the number of windows a day holds. A watch left running for days
- *  can see that and send one message.
- *
- *  ⚠️ **It does not wait** (that would stop the git watch for seconds), and it says what it is
- *  about to do first, so the log holds what it saw. Two never run at once because the window it
- *  sent to is remembered **before** sending, and the decision refuses a window twice. */
-export async function maybeStartQuotaSession(
-  config: ResolvedConfig,
-  state: WatchState,
-  screen: WatchScreen,
-  emit: Emit,
-): Promise<void> {
-  const session = config.providers.quotaSession;
-  if (session === null) return;
-  const nowMs = Date.now();
-  // Not being able to read the quota is the same as any other section failing: carry on.
-  const cards = await safely<QuotaCard[] | null>(() => session.read(), null);
-  if (cards === null) return;
-  const start = quotaSessionToStart(cards, state.quotaSession, nowMs);
-  if (start === null) return;
-  screen.event(nowMs, 'prompt', `Claude quota session is closed (${start.why}), opening it with claude -p "hi" ...`);
-  state.quotaSession = start.probe;
-  void startQuotaSession(session.cwd, emit);
-}
-
 /** Offer to add an ssh key, **once, at startup**.
  *
  *  A watch is started by the person who owns the machine, so at that moment there is somebody at
@@ -179,6 +152,7 @@ export async function showPanel(
     local: state.local,
     versions: state.versions ?? [],
     ssh: state.ssh,
+    quotaSessions: quotaSessionRows(config, state, nowMs),
   });
   state.lastPanelAtMs = nowMs;
   // The bottom line can wrap to more than one row, so it is **built before the panel's height
@@ -225,13 +199,17 @@ function bottomLine(state: WatchState, screen: WatchScreen, width: number): stri
 
 /** Wait for the next check. **The local state is still read while waiting** (once a second by
  *  default). On a terminal the screen is redrawn; elsewhere one line is rewritten in place and
- *  leaves no history. */
+ *  leaves no history.
+ *
+ *  The quota schedule is looked at here too, and not in the git loop: it is a clock, and a clock
+ *  whose resolution was `--interval` would fire an hour late for anyone who checks git hourly. */
 export async function waitNext(
   config: ResolvedConfig,
   args: ReportArgs,
   state: WatchState,
   screen: WatchScreen,
   draw: () => Promise<void>,
+  emit: Emit,
 ): Promise<void> {
   state.nextGitCheckAtMs = Date.now() + args.interval * 1000;
   for (;;) {
@@ -240,6 +218,7 @@ export async function waitNext(
     await sleep(Math.min(args.sample * 1000, state.nextGitCheckAtMs - nowMs));
     if (Date.now() >= state.nextGitCheckAtMs) break;
     await reportLocalChanges(config, state, screen);
+    await maybeStartQuotaSession(config, state, screen, emit, { dryRun: args.dryRun });
     if (screen.live) await draw();
     else
       screen.beat({

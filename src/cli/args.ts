@@ -5,6 +5,7 @@
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import { helpLines } from '../core/watchTargets/verbs.js';
+import { parseScheduleTimes } from '../core/quota/schedule.js';
 
 export interface Args {
   /** Where the config file is. Defaults to `next-watch.config.mjs` in the working directory. */
@@ -30,6 +31,9 @@ export interface Args {
   /** Whether the quota-opening session may run **on a run with no config file**. A config file
    *  says what it wants in `providers`, and that wins. */
   quotaSession: boolean;
+  /** The times it may run at, as they were typed (`09:00`). Empty means the automatic mode.
+   *  Checked while the arguments are parsed, so an unusable one never reaches the watch. */
+  quotaSessionAt: string[];
 }
 
 /** The default config file, relative to the working directory. */
@@ -83,7 +87,33 @@ const SERVER_OPTIONS = {
     default: false,
     describe: 'with no config file, allow the session that opens a closed quota window',
   },
+  'quota-session-at': {
+    type: 'string',
+    array: true,
+    nargs: 1,
+    default: [] as string[],
+    // Naming times is asking for the session, so this does not need `--quota-session` beside it.
+    describe: 'open the quota window only at these times (HH:MM,HH:MM); implies --quota-session',
+  },
 } as const;
+
+/** The times from `--quota-session-at`, which may be repeated **and** comma-separated: a person
+ *  reaching for a list writes commas, and a person scripting it repeats the flag. */
+function scheduleTimesFrom(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return (value as unknown[]).flatMap(v => String(v).split(',')).filter(t => t.trim() !== '');
+}
+
+/** Refused here rather than at nine o'clock: the times are read once, at startup, and a watch
+ *  that starts and then quietly never opens a window is the worst of the outcomes.
+ *
+ *  Exported because yargs answers a failed check by printing usage and **exiting the process**,
+ *  which a test cannot catch; the check itself can be held to a table. */
+export function checkScheduleTimes(a: { 'quota-session-at'?: unknown }): true {
+  const times = scheduleTimesFrom(a['quota-session-at']);
+  if (times.length > 0) parseScheduleTimes(times, '--quota-session-at');
+  return true;
+}
 
 export function parseArgs(o: ParseArgsOptions = {}, argv: readonly string[] = hideBin(process.argv)): Args {
   // The option is **not defined** rather than hidden when it is off: `strict()` then refuses
@@ -126,6 +156,7 @@ export function parseArgs(o: ParseArgsOptions = {}, argv: readonly string[] = hi
     // one rule this whole feature is held to. Measured against yargs 18: `build` came back
     // `['build', 'other']` and the run went on silently.
     .check(a => (Array.isArray(a.build) ? '--build takes one script, and it applies to every --start server' : true))
+    .check(checkScheduleTimes)
     // The keys are documented in `--help` with the same wording the screen's own `help` uses,
     // so the two cannot say different things.
     .epilogue(`In a terminal:\n  ${helpLines().join('\n  ')}`)
@@ -144,5 +175,6 @@ export function parseArgs(o: ParseArgsOptions = {}, argv: readonly string[] = hi
     access: typeof a.access === 'number' ? a.access : null,
     start: Array.isArray(a.start) ? a.start.map(String) : [],
     build: typeof a.build === 'string' ? a.build : null,
+    quotaSessionAt: scheduleTimesFrom(a['quota-session-at']),
   };
 }

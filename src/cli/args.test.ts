@@ -2,7 +2,7 @@
 // config must not be offered a `--config` flag that would then be ignored — a listed flag that
 // does nothing is worse than no flag at all.
 import { describe, expect, it } from 'bun:test';
-import { parseArgs, DEFAULT_CONFIG } from './args.js';
+import { checkScheduleTimes, parseArgs, DEFAULT_CONFIG } from './args.js';
 
 describe('parseArgs', () => {
   it('reads the config path when the flag is there', () => {
@@ -40,6 +40,58 @@ describe('parseArgs', () => {
 
 // `--start` is a repeatable list next to flags that take no value, which is the shape yargs
 // gets wrong when left to itself.
+describe('parseArgs, the quota-session schedule', () => {
+  const cases: [name: string, argv: string[], want: string[]][] = [
+    ['nothing named leaves the automatic mode', ['--start', 'dev'], []],
+    ['one time', ['--quota-session-at', '09:00'], ['09:00']],
+    [
+      'a comma-separated list, which is what a person reaches for',
+      ['--quota-session-at', '09:00,14:00'],
+      ['09:00', '14:00'],
+    ],
+    [
+      'the flag repeated, which is what a script reaches for',
+      ['--quota-session-at', '09:00', '--quota-session-at', '14:00'],
+      ['09:00', '14:00'],
+    ],
+    // ⚠️ The reason `nargs: 1` is set here too: a greedy list reads `--once` as a time.
+    ['a boolean flag after the list is not swallowed', ['--quota-session-at', '09:00', '--once'], ['09:00']],
+  ];
+
+  for (const [name, argv, want] of cases) {
+    it(name, () => {
+      expect(parseArgs({}, argv).quotaSessionAt).toEqual(want);
+    });
+  }
+
+  it('does not swallow the flags that follow it', () => {
+    const a = parseArgs({}, ['--quota-session-at', '09:00,14:00', '--once', '--interval', '5']);
+
+    expect(a.once).toBe(true);
+    expect(a.interval).toBe(5);
+  });
+
+  // Refused while the arguments are read, not at nine o'clock: the times are looked at once, at
+  // startup, and a watch that starts and then quietly never opens a window is the worst outcome.
+  // yargs answers a failed check by printing usage and exiting the process, so the check itself
+  // is what is held to a table here.
+  const refused: [name: string, times: string][] = [
+    ['a single-digit hour', '9:00'],
+    ['an hour that does not exist', '24:00'],
+    ['a duplicate', '09:00,09:00'],
+  ];
+  for (const [name, times] of refused) {
+    it(`refuses ${name}, naming the flag rather than the config file`, () => {
+      expect(() => checkScheduleTimes({ 'quota-session-at': [times] })).toThrow('--quota-session-at');
+    });
+  }
+
+  it('passes a list it can read', () => {
+    expect(checkScheduleTimes({ 'quota-session-at': ['09:00,14:00'] })).toBe(true);
+    expect(checkScheduleTimes({})).toBe(true);
+  });
+});
+
 describe('parseArgs, the zero-config flags', () => {
   const cases: [name: string, argv: string[], start: string[], build: string | null, quotaSession: boolean][] = [
     ['nothing named', [], [], null, false],

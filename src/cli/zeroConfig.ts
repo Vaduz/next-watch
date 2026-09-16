@@ -39,7 +39,7 @@ function appNameFor(root: string): string {
 }
 
 /** The config nobody wrote. */
-function zeroConfig(o: { root: string; quotaSession: boolean }): NextWatchConfig {
+function zeroConfig(o: { root: string; quotaSession: boolean; quotaSessionAt: readonly string[] }): NextWatchConfig {
   const { choice, appName } = projectShape(o.root);
   return {
     appName,
@@ -55,7 +55,7 @@ function zeroConfig(o: { root: string; quotaSession: boolean }): NextWatchConfig
       dependencyPaths: ['package.json', ...(choice.lockfile === null ? [] : [choice.lockfile])],
     },
     servers: [],
-    providers: zeroConfigProviders({ quotaSession: o.quotaSession }),
+    providers: zeroConfigProviders({ quotaSession: o.quotaSession, quotaSessionAt: o.quotaSessionAt }),
   };
 }
 
@@ -77,13 +77,16 @@ async function baseConfig(args: Args): Promise<NextWatchConfig> {
   if (fs.existsSync(path.resolve(args.config))) {
     // The file wins over every default here, `providers` included: it is the statement of what
     // this machine wants, and a flag must not quietly overrule it.
-    if (args.quotaSession) {
-      process.stderr.write(`--quota-session is ignored: ${args.config} decides that in providers.quotaSession\n`);
+    const ignored = [args.quotaSession ? '--quota-session' : '', args.quotaSessionAt.length ? '--quota-session-at' : '']
+      .filter(f => f !== '')
+      .join(' and ');
+    if (ignored !== '') {
+      process.stderr.write(`${ignored} is ignored: ${args.config} decides that in providers.quotaSession\n`);
     }
     return loadConfig(args.config);
   }
   if (args.start.length === 0) throw nothingToDo(args.config);
-  return zeroConfig({ root: process.cwd(), quotaSession: args.quotaSession });
+  return zeroConfig({ root: process.cwd(), quotaSession: args.quotaSession, quotaSessionAt: args.quotaSessionAt });
 }
 
 /** The config this run watches with: the file if there is one, the derived defaults if not, and

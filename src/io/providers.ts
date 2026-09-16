@@ -13,11 +13,13 @@
  *   - `quota` reads the credentials on disk and may call the usage endpoint. It prefers a cache
  *     another program on the machine wrote, so the endpoint is asked as little as possible.
  *   - `quotaSession` **starts a session of its own** (`claude -p`) when the five-hour window is
- *     closed, in a sandbox directory. It is the only switch here that spends anything.
+ *     closed, in a sandbox directory. It is the only switch here that spends anything. With
+ *     `at`, it does so only at the times listed there.
  *   - `services` and `tools` reach GitHub and the status pages at a fixed interval.
  *   - `sshAgent` runs `ssh-add -l`, and lets a person add a key from the screen. */
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { parseScheduleTimes, type ScheduledTime } from '../core/quota/schedule.js';
 import type { AgentSessionRow, QuotaCard, ServiceCard, SshAgentCard, ToolVersionRow } from '../core/types.js';
 import { clientName } from './http.js';
 import { liveAgentSessions } from './sessions/index.js';
@@ -56,8 +58,12 @@ export interface WatchProviders {
   quota?: boolean;
   /** Open a closed five-hour quota window with `claude -p`. The default `cwd` is an empty
    *  directory under the temp directory: starting it inside a repository would put that
-   *  repository's instructions into the context of a message whose only purpose is to exist. */
-  quotaSession?: boolean | { cwd: string };
+   *  repository's instructions into the context of a message whose only purpose is to exist.
+   *
+   *  `at: ['09:00', '14:00']` opens one **only at those times** (in the watch's clock) and
+   *  **turns the automatic mode off**: between them a closed window stays closed. That is the
+   *  point of a schedule — a window opened at 04:00 is spent by the time the day starts. */
+  quotaSession?: boolean | { cwd?: string; at?: readonly string[] };
   /** The public status pages. Defaults to the two the CLIs depend on. */
   services?: boolean | readonly ServiceSpec[];
   /** The installed CLI versions, and installing a new release. */
@@ -77,11 +83,13 @@ export interface WatchProviders {
  *  `quotaSession` is not one that only looks: it **starts a session of its own** (`claude -p`)
  *  to open a closed five-hour window. Spending something is not a default, so it waits to be
  *  asked for with `--quota-session`. */
-export function zeroConfigProviders(o: { quotaSession: boolean }): WatchProviders {
+export function zeroConfigProviders(o: { quotaSession: boolean; quotaSessionAt: readonly string[] }): WatchProviders {
   return {
     agentSessions: true,
     quota: true,
-    quotaSession: o.quotaSession,
+    // Naming times is itself the asking, so `--quota-session-at` needs no `--quota-session`
+    // beside it.
+    quotaSession: o.quotaSessionAt.length > 0 ? { at: o.quotaSessionAt } : o.quotaSession,
     services: true,
     tools: true,
     sshAgent: true,
@@ -100,8 +108,11 @@ export interface ResolvedProviders {
   autoUpdate: readonly string[];
   /** Where to open a quota window, and how to read the quota to know it is closed. Null when
    *  that is off. **Reading the quota here does not require the `quota` section**: the two go
-   *  through the same cache, so nothing is fetched twice. */
-  quotaSession: { cwd: string; read: () => Promise<QuotaCard[]> } | null;
+   *  through the same cache, so nothing is fetched twice.
+   *
+   *  `at` holds the listed times as minutes since midnight, already checked, or null for the
+   *  automatic mode. */
+  quotaSession: { cwd: string; at: readonly ScheduledTime[] | null; read: () => Promise<QuotaCard[]> } | null;
 }
 
 /** What a `boolean | T[]` switch means: off, the default list, or the given list. */
@@ -110,22 +121,38 @@ function listOf<T>(switched: boolean | readonly T[] | undefined, fallback: reado
   return switched === true ? fallback : switched;
 }
 
-/** Where the quota-opening session runs, or null when it is off. */
-function quotaSessionCwd(switched: WatchProviders['quotaSession'], appName: string): string | null {
+/** Where the quota-opening session runs and when, or null when it is off. The times are checked
+ *  here rather than where they are used, so a mistyped `09:0` stops the watch at startup instead
+ *  of at nine o'clock. */
+function quotaSessionSetting(
+  switched: WatchProviders['quotaSession'],
+  appName: string,
+  where: string,
+): { cwd: string; at: readonly ScheduledTime[] | null } | null {
   if (switched === undefined || switched === false) return null;
-  return switched === true ? join(tmpdir(), appName) : switched.cwd;
+  if (switched === true) return { cwd: join(tmpdir(), appName), at: null };
+  return {
+    cwd: switched.cwd ?? join(tmpdir(), appName),
+    at: switched.at === undefined ? null : parseScheduleTimes(switched.at, where),
+  };
 }
 
 /** Turn the switches into readers. `appName` names the cache directory and identifies this
  *  watcher to everything it talks to. */
-export function buildProviders(o: { appName: string; providers: WatchProviders }): ResolvedProviders {
+export function buildProviders(o: {
+  appName: string;
+  providers: WatchProviders;
+  /** What a complaint about `quotaSession.at` names as its source. Defaults to the key itself,
+   *  which is what a host building its config in code recognises. */
+  where?: string;
+}): ResolvedProviders {
   const { appName } = o;
   const client = clientName(appName);
   const services = listOf(o.providers.services, DEFAULT_SERVICES);
   const tools = listOf(o.providers.tools, DEFAULT_TOOLS);
   const quotas = (): Promise<QuotaCard[]> =>
     watchQuotaCards({ appName, client, nowMs: Date.now(), ttlMs: MINUTE_TTL_MS });
-  const cwd = quotaSessionCwd(o.providers.quotaSession, appName);
+  const session = quotaSessionSetting(o.providers.quotaSession, appName, o.where ?? 'providers.quotaSession');
   return {
     sessions: o.providers.agentSessions === true ? () => Promise.resolve(liveAgentSessions(Date.now())) : undefined,
     quotas: o.providers.quota === true ? quotas : undefined,
@@ -137,6 +164,6 @@ export function buildProviders(o: { appName: string; providers: WatchProviders }
         : () => toolVersionRows({ tools, nowMs: Date.now(), ttlMs: VERSION_TTL_MS, userAgent: client }),
     sshAgent: o.providers.sshAgent === true ? () => sshAgentCard(Date.now(), MINUTE_TTL_MS) : undefined,
     autoUpdate: (tools ?? []).filter(t => t.autoUpdate === true).map(t => t.command),
-    quotaSession: cwd === null ? null : { cwd, read: quotas },
+    quotaSession: session === null ? null : { ...session, read: quotas },
   };
 }

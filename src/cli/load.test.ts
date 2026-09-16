@@ -90,3 +90,43 @@ describe('loadConfig, the shape of servers', () => {
     });
   }
 });
+
+// The schedule is checked while the file's path is still in hand. `buildProviders` checks it
+// too, but from there the only name it can give is the key, and a mistyped time is a typing
+// mistake whose answer is the file it is in.
+describe('loadConfig, the quota-session schedule', () => {
+  const withProviders = (providers: string): string =>
+    `export default { appName: 'site', pull: { blocked: [] }, servers: [], providers: ${providers} };\n`;
+
+  const accepted: [name: string, providers: string][] = [
+    ['no providers at all', `undefined`],
+    ['the automatic mode', `{ quotaSession: true }`],
+    ['a schedule', `{ quotaSession: { at: ['09:00', '14:00'] } }`],
+    ['a schedule and a sandbox together', `{ quotaSession: { cwd: '/tmp/box', at: ['09:00'] } }`],
+  ];
+  for (const [name, providers] of accepted) {
+    it(`accepts ${name}`, async () => {
+      await loadConfig(configFile(withProviders(providers)));
+    });
+  }
+
+  const refused: [name: string, providers: string, message: RegExp][] = [
+    ['a single-digit hour', `{ quotaSession: { at: ['9:00'] } }`, /is not a time/],
+    ['an hour that does not exist', `{ quotaSession: { at: ['24:00'] } }`, /is not a time/],
+    ['a duplicate', `{ quotaSession: { at: ['09:00', '09:00'] } }`, /listed twice/],
+    ['an empty list, which says nothing at all', `{ quotaSession: { at: [] } }`, /at least one time/],
+    ['a string where a list belongs', `{ quotaSession: { at: '09:00' } }`, /must be an array of times/],
+  ];
+  for (const [name, providers, message] of refused) {
+    it(`refuses ${name}`, async () => {
+      const file = configFile(withProviders(providers));
+      const thrown = await loadConfig(file).then(
+        () => null,
+        (e: unknown) => (e instanceof Error ? e.message : JSON.stringify(e)),
+      );
+      if (thrown === null) throw new Error(`${file} was accepted, and should not have been`);
+      expect(thrown).toMatch(message);
+      expect(thrown.startsWith(file)).toBe(true);
+    });
+  }
+});

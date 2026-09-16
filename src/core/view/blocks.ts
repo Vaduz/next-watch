@@ -1,7 +1,8 @@
 /** The **tables** in the panel body: servers, quotas, tasks, sessions, external services.
  *
  *  Each is a table aligned by `renderCells`, and the selection cursor is a **column** at the
- *  left edge. What is shown as a single row instead (the repository, the ssh-agent, the CLI
+ *  left edge. The external services are `services.ts`: that table alone carries a second line
+ *  under each row. What is shown as a single row instead (the repository, the ssh-agent, the CLI
  *  versions) is `lines.ts`.
  *
  *  Colour marks exceptions only. **A settled state gets no colour**, so every section is built
@@ -14,7 +15,6 @@ import type {
   AgentSessionRow,
   QuotaCard,
   QuotaWindowView,
-  ServiceCard,
   TaskRow,
   ToolVersionRow,
   WatchPanel,
@@ -235,40 +235,4 @@ export function sessionBlock(p: WatchPanel, paint: Paint, view: WatchView): stri
   });
   const rendered = renderCells([head, ...meta], paint);
   return [rendered[0], ...sessions.flatMap((s, i) => [sessionName(s, view, paint, tones[i]), rendered[i + 1]])];
-}
-
-const SERVICE_TONE: Record<ServiceCard['indicator'], Tone> = {
-  none: 'ok',
-  minor: 'warn',
-  major: 'bad',
-  critical: 'bad',
-  maintenance: 'warn',
-  unknown: 'dim',
-};
-
-const SERVICE_GLYPH: Record<ServiceCard['indicator'], string> = {
-  none: '●',
-  minor: '▲',
-  major: '▲',
-  critical: '✕',
-  maintenance: '■',
-  unknown: '?',
-};
-
-/** The external services, listing **only the components that are not operational**. */
-export function serviceBlock(p: WatchPanel, paint: Paint, layout: WatchLayout, view: WatchView): string[] {
-  if (!p.services.length) return [];
-  const rows = p.services.map((s, i): Cell[] => {
-    // All operational takes no colour; only the degraded rows stand out.
-    const row = s.indicator === 'none' ? undefined : SERVICE_TONE[s.indicator];
-    return [
-      gutter(`service:${s.name}`, view.selected),
-      { text: i === 0 ? 'SERVICE' : '', tone: 'dim' },
-      { text: s.name, tone: row ?? 'bold' },
-      { text: SERVICE_GLYPH[s.indicator], tone: SERVICE_TONE[s.indicator] },
-      { text: s.error ?? s.description, tone: s.error === null ? (row ?? 'ok') : 'dim' },
-      { text: truncateDisplay(s.degraded.join(' / '), layout.service), tone: row ?? 'dim' },
-    ];
-  });
-  return renderCells(rows, paint);
 }

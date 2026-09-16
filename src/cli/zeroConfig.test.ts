@@ -87,6 +87,14 @@ describe('configFor, with no config file', () => {
     expect((await run(['--start', 'dev', '--quota-session'])).providers?.quotaSession).toBe(true);
   });
 
+  it('turns named times into the schedule, with no --quota-session beside them', async () => {
+    project({ 'package.json': '{"name":"site"}' });
+
+    const config = await run(['--start', 'dev', '--quota-session-at', '09:00,14:00']);
+
+    expect(config.providers?.quotaSession).toEqual({ at: ['09:00', '14:00'] });
+  });
+
   it('keeps the scripts in the order they were named', async () => {
     project({ 'package.json': '{"name":"site"}' });
 

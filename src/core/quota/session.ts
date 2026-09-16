@@ -45,6 +45,17 @@ function sessionWindow(card: QuotaCard): QuotaWindowView | null {
   return card.windows.find(w => w.name === SESSION_WINDOW_NAME) ?? null;
 }
 
+/** The five-hour window of one backend among the cards, or null when it has none — the shape
+ *  every decision about opening a window starts from, whichever CLI it is about. */
+export function sessionWindowOf(cards: readonly QuotaCard[], label: string): QuotaWindowView | null {
+  const card = cards.find(c => c.label === label);
+  if (card === undefined || card.windows.length === 0) return null;
+  return sessionWindow(card);
+}
+
+/** The label of the backend whose window `claude -p` opens. */
+export { CLAUDE_LABEL };
+
 /** One line of **evidence** for reading it as closed.
  *
  *  How a closed window actually looks in the API has not been observed directly — that would

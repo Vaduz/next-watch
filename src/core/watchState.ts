@@ -15,6 +15,21 @@ import { resolveSelection, tabTargets, watchTargets } from './watchTargets/targe
 import { type LocalSnapshot } from './watchEvents.js';
 import { type AutoUpdateMemo } from './toolVersionView.js';
 import { type QuotaSessionProbe } from './quota/view.js';
+import { type FiredTimes } from './quota/schedule.js';
+
+/** The scheduled quota session's progress.
+ *
+ *  `fired` is null until the schedule is **armed**, which happens on the first look at the clock
+ *  rather than here: what counts as already past depends on the times, and this file is where
+ *  the state begins, not where the config is read. */
+export interface QuotaScheduleState {
+  fired: FiredTimes | null;
+  /** When a session was last started, for the `sent HH:MM` tail on the service line. */
+  sentAtMs: number | null;
+  /** The five-hour window as the last read saw it, so the line can be drawn without the
+   *  `quota` section being switched on. */
+  window: { open: boolean; closesAtMs: number | null } | null;
+}
 
 /** The current HEAD and how many commits are still to come. **It is re-read right after a
  *  pull**, so the panel and the heartbeat show the value after the merge rather than reusing
@@ -43,6 +58,9 @@ export interface WatchState {
   /** The last time a usage window was opened, keyed so the same window is never opened twice.
    *  Null means it has never happened. */
   quotaSession: QuotaSessionProbe | null;
+  /** What the schedule has done so far and what the last quota read saw, for deciding the next
+   *  firing and for the line under the service row. */
+  quotaSchedule: QuotaScheduleState;
   /** The ssh-agent from the previous tick. Null means it has never been read. */
   ssh: SshAgentCard | null;
   /** True while the terminal belongs to a person (a passphrase prompt). **Nothing redraws.** */
@@ -69,6 +87,7 @@ export function initialState(head: string, nowMs: number): WatchState {
     versions: null,
     autoUpdated: {},
     quotaSession: null,
+    quotaSchedule: { fired: null, sentAtMs: null, window: null },
     repo: { head, behind: 0 },
     ssh: null,
     paused: false,
