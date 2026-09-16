@@ -354,6 +354,10 @@ names — so reopening the dashboard shows the running server rather than failin
 one onto a taken port. It is deliberately **not** stopped when the watch exits; stopping it is
 something a person asks for, with `(s)top` on the screen.
 
+Stopping a server stops **its own session** — the server and everything it forked to do its work.
+A job the server started in a session of its own (a `detached: true` spawn, which calls `setsid`)
+is a descendant by parentage only, so it is left running and the event log names it.
+
 The note is only trusted when the process it names is still the one it was written about: alive,
 signalable by this user, running something whose command line still names the script, and — on
 Linux, where `/proc` says so — started at the moment recorded. Pids get reused, and a note is a

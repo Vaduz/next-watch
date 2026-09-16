@@ -4,6 +4,7 @@
 //   - probing before anything was started must **not** start anything (`--once --dry-run` rests
 //     on it),
 //   - stopping must take the grandchild with it, because that is the process holding the port,
+//   - stopping must **not** take a job the server started in a session of its own with it,
 //   - the child's output must reach the log file the access pane reads.
 import { afterEach, describe, expect, it } from 'bun:test';
 import fs from 'node:fs';
@@ -24,8 +25,31 @@ console.log('- Local:        http://localhost:31447');
 setInterval(() => {}, 3600_000);
 `;
 
+/** The same, plus a job started the way a server starts one for the user: `detached: true`,
+ *  which calls `setsid` and so gives it a session of its own. Stopping the server must leave it
+ *  and its own child running. */
+const SERVER_WITH_JOB = `
+import { spawn } from 'node:child_process';
+const forever = ['-e', 'setInterval(() => {}, 3600_000)'];
+const own = spawn(process.execPath, forever, { stdio: 'ignore' });
+const job = spawn(process.execPath, ['-e', \`
+  const { spawn } = require('node:child_process');
+  const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 3600_000)'], { stdio: 'ignore' });
+  console.error('jobchild ' + child.pid);
+  setInterval(() => {}, 3600_000);
+\`], { stdio: ['ignore', 'ignore', 'inherit'], detached: true });
+job.unref();
+console.log('own ' + own.pid);
+console.log('job ' + job.pid);
+console.log('- Local:        http://localhost:31447');
+setInterval(() => {}, 3600_000);
+`;
+
 const dirs: string[] = [];
 const servers: ChildServer[] = [];
+/** Detached pids a test started. **Killed by pid**, never by a pattern: a `pkill -f` matches the
+ *  shell that is running the suite as readily as the job it was aimed at. */
+const detached: number[] = [];
 
 function scratch(script: string): { dir: string; file: string } {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'next-watch-test-'));
@@ -38,6 +62,13 @@ function scratch(script: string): { dir: string; file: string } {
 afterEach(async () => {
   for (const server of servers.splice(0)) {
     await server.stop(() => undefined);
+  }
+  for (const pid of detached.splice(0)) {
+    try {
+      process.kill(pid, 'SIGKILL');
+    } catch {
+      /* already gone, which is the ordinary case for the ones a test expected to die */
+    }
   }
   for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
 });
@@ -135,6 +166,35 @@ describe('ChildServer', () => {
     expect(await server.stop(emit)).toBe(true);
 
     expect(isSignalable(grandchild)).toBe(false);
+  }, 20_000);
+
+  // ⚠️ **The regression this guards.** A restart once sent SIGTERM to a six-minute job the
+  // server had started for the user, because it was a descendant. Parentage is not the question;
+  // the session is.
+  it('leaves a job the server started in its own session running', async () => {
+    const { dir, file } = scratch(SERVER_WITH_JOB);
+    const server = make(dir, [file]);
+    const { events, emit } = collect();
+
+    await server.start(emit);
+    const written = await logContaining(path.join(dir, 'log', 'dev.txt'), /jobchild \d+/);
+    const pids = (name: string): number => Number(new RegExp(`${name} (\\d+)`).exec(written)?.[1]);
+    const own = pids('own');
+    const job = pids('job');
+    const jobchild = pids('jobchild');
+    detached.push(job, jobchild);
+    for (const pid of [own, job, jobchild]) expect(isSignalable(pid)).toBe(true);
+
+    expect(await server.stop(emit)).toBe(true);
+
+    // The server's own child goes, because it is the one that could still hold the port.
+    expect(isSignalable(own)).toBe(false);
+    // The job does not, and neither does what the job started.
+    expect(isSignalable(job)).toBe(true);
+    expect(isSignalable(jobchild)).toBe(true);
+    // And the log says so, so that a reader wondering why the tree is still there can see it.
+    expect(events.some(e => e.startsWith(`info dev: leaving pid ${job} (own session: `))).toBe(true);
+    expect(events.some(e => e.includes(`leaving pid ${jobchild}`))).toBe(false);
   }, 20_000);
 
   it('reports a command that is not there rather than throwing', async () => {

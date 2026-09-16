@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+- **Stopping a server no longer stops the jobs it started.** A restart sent SIGTERM to the whole
+  process tree under the server, and a job the server had spawned for the user with
+  `detached: true` — six minutes into a language-model call — was in that tree. It was a
+  descendant by parentage and nothing else.
+
+  The tree is still collected, and then narrowed to the server's **own session**: `detached: true`
+  calls `setsid`, which gives the child a session id of its own that its own children inherit,
+  while an ordinary child shares the server's however deep it sits. So the session is what tells
+  a compiler the server forked from a job the server was asked to run, and parentage is not.
+  Anything left running is named in the event log — `leaving pid 960342 (own session: …)`.
+
+  Where `ps` prints no session id the process group is used instead, and where it prints neither
+  the whole tree is stopped as before, with a warning: a descendant left behind by mistake goes
+  on holding the port, which is the worse of the two failures. For the same reason a descendant
+  whose own session cannot be read is stopped — not knowing is not proof that it is somebody
+  else's. The `(k)ill` task verb is unchanged: stopping a task means stopping what that task
+  started.
+
 ## 0.4.0
 
 - **A Codex session's row shows its model.** It has always shown `-`, and the reason was one

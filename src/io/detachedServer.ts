@@ -19,8 +19,8 @@ import path from 'node:path';
 import { splitOutputLines } from '../core/commandOutput.js';
 import { sleep } from '../core/util.js';
 import { parseServerAddress, type ServerAddress } from '../core/scriptServer.js';
-import { processTree } from '../core/ps.js';
 import { isSignalable, killAll, procStartTicks, psSnapshot } from './processes.js';
+import { stopSet } from './stopTree.js';
 import { readTail } from './fileWindow.js';
 import { pidFilePath, readPidFile, removePidFile, writePidFile, type ServerPidFile } from './pidFile.js';
 import type { WatchServerRow } from '../core/types.js';
@@ -164,7 +164,7 @@ export class DetachedServer {
       emit('info', `${this.spec.id} is not running`);
       return true;
     }
-    const pids = processTree(psSnapshot().procs, note.pid);
+    const pids = stopSet(this.spec.id, note.pid, emit);
     emit('step', `${this.spec.id}: stopping pid ${pids.join(', ')}`);
     const survivors = await killAll(pids);
     removePidFile(this.pidFile);

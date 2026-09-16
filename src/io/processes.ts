@@ -59,20 +59,43 @@ export function procStartTicks(pid: number): string | null {
   }
 }
 
-/** Every process (pid, ppid, command), plus the reason when it could not be read.
+/** The `-o` formats to try, widest first. `sid` is what tells a server's own children from a job
+ *  it started in a session of its own, and `pgid` is the next best thing where a `ps` does not
+ *  print sessions; the three-column form is what every `ps` prints and always works. */
+const PS_FORMATS = [
+  { arg: 'pid=,ppid=,pgid=,sid=,command=', extra: 2 },
+  { arg: 'pid=,ppid=,pgid=,command=', extra: 1 },
+  { arg: 'pid=,ppid=,command=', extra: 0 },
+] as const;
+
+/** Which format this host answered to. **Remembered**, because `psSnapshot` runs once a second:
+ *  a `ps` that refuses `sid` would otherwise be asked, and refuse, every second for the life of
+ *  the watch. */
+let psFormat = 0;
+
+/** Every process (pid, ppid, command, and the group and session where `ps` prints them), plus
+ *  the reason when it could not be read.
  *
  *  ⚠️ Failing here **is not fatal**: only the parent-child walk is lost, and anything done by
  *  pid alone still works. So the failure comes back as a value rather than throwing. */
 export function psSnapshot(): { procs: ProcInfo[]; error: string | null } {
-  try {
-    const stdout = execFileSync('ps', ['-A', '-o', 'pid=,ppid=,command='], {
-      encoding: 'utf-8',
-      maxBuffer: 16 * 1024 * 1024,
-    });
-    return { procs: parsePsTable(stdout), error: null };
-  } catch (e) {
-    return { procs: [], error: String(e) };
+  let last = 'ps: no format accepted';
+  for (const [at, format] of PS_FORMATS.entries()) {
+    if (at < psFormat) continue;
+    try {
+      const stdout = execFileSync('ps', ['-A', '-o', format.arg], {
+        encoding: 'utf-8',
+        maxBuffer: 16 * 1024 * 1024,
+      });
+      // Only a format that worked is remembered. A `ps` that failed for some passing reason
+      // leaves the pointer where it was, so the next second asks for the columns again.
+      psFormat = at;
+      return { procs: parsePsTable(stdout, format.extra), error: null };
+    } catch (e) {
+      last = String(e);
+    }
   }
+  return { procs: [], error: last };
 }
 
 /** pid -> seconds since it started. Empty when unreadable: an uptime is one column of a table,

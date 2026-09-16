@@ -17,8 +17,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { OutputLineReader } from '../core/commandOutput.js';
 import { parseServerAddress, type ServerAddress } from '../core/scriptServer.js';
-import { processTree } from '../core/ps.js';
-import { killAll, psSnapshot, sendSignal } from './processes.js';
+import { killAll, sendSignal } from './processes.js';
+import { stopSet } from './stopTree.js';
 import type { WatchServerRow } from '../core/types.js';
 import type { Emit } from '../config.js';
 
@@ -57,7 +57,9 @@ function installExitHook(): void {
   if (hookInstalled) return;
   hookInstalled = true;
   process.on('exit', () => {
-    for (const server of running) server.signalTree('SIGTERM');
+    // Nothing to emit to: the screen is being torn down, and what this leaves running it leaves
+    // running whether or not anybody reads a line about it.
+    for (const server of running) server.signalTree('SIGTERM', () => undefined);
   });
 }
 
@@ -130,7 +132,7 @@ export class ChildServer {
       return true;
     }
     this.stopping = true;
-    const pids = processTree(psSnapshot().procs, pid);
+    const pids = stopSet(this.spec.id, pid, emit);
     emit('step', `${this.spec.id}: stopping pid ${pids.join(', ')}`);
     const survivors = await killAll(pids);
     this.stopping = false;
@@ -143,11 +145,12 @@ export class ChildServer {
     return true;
   }
 
-  /** Signal the tree without waiting for it, for the exit hook. */
-  signalTree(sig: NodeJS.Signals): void {
+  /** Signal the tree without waiting for it, for the exit hook. A job the server started in a
+   *  session of its own outlives the watch too — the contract is the same as `stop`'s. */
+  signalTree(sig: NodeJS.Signals, emit: Emit): void {
     const pid = this.child?.pid;
     if (!this.alive() || pid === undefined) return;
-    for (const p of processTree(psSnapshot().procs, pid)) sendSignal(p, sig);
+    for (const p of stopSet(this.spec.id, pid, emit)) sendSignal(p, sig);
   }
 
   /** Forget the child. The handle is dropped **before** anything else can read a pid that the

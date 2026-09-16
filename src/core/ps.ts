@@ -1,20 +1,42 @@
 /** Reading the output of `ps`, and walking the process tree it describes. Pure functions;
  *  running `ps` belongs to `io/`. */
 
-/** One process, with only what is needed to walk the tree. */
+/** One process, with only what is needed to walk the tree and to tell **which session it
+ *  belongs to**.
+ *
+ *  `pgid` and `sid` are optional because not every `ps` prints them, and a reader that does not
+ *  need them (the session lists) never looks. Where they are there, they are what separates a
+ *  server's own children from a job it started in a session of its own; see `killSet.ts`. */
 export interface ProcInfo {
   pid: number;
   ppid: number;
   command: string;
+  /** Process group id, or absent where `ps` did not give one. */
+  pgid?: number;
+  /** Session id, or absent for the same reason. `setsid` — which `detached: true` calls — is
+   *  what gives a process one of its own. */
+  sid?: number;
 }
 
-/** Parse `ps -A -o pid=,ppid=,command=`, which prints no header. */
-export function parsePsTable(stdout: string): ProcInfo[] {
+/** How many numeric columns stand between `ppid` and the command. */
+export type PsColumns = 0 | 1 | 2;
+
+/** Parse `ps -A -o pid=,ppid=[,pgid=[,sid=]],command=`, which prints no header.
+ *
+ *  `extra` says how many of the two optional columns were asked for, because a command line is
+ *  free to begin with digits (`7zip …`) and counting them would otherwise be a guess. A column
+ *  that did not come back as a number is left absent rather than filled with a wrong one. */
+export function parsePsTable(stdout: string, extra: PsColumns = 0): ProcInfo[] {
+  const middle = '\\s+(\\d+)'.repeat(extra);
+  const row = new RegExp(`^\\s*(\\d+)\\s+(\\d+)${middle}\\s+(\\S.*?)\\s*$`);
   const out: ProcInfo[] = [];
   for (const line of stdout.split('\n')) {
-    const m = /^\s*(\d+)\s+(\d+)\s+(\S.*?)\s*$/.exec(line);
+    const m = row.exec(line);
     if (!m) continue;
-    out.push({ pid: Number(m[1]), ppid: Number(m[2]), command: m[3] });
+    const info: ProcInfo = { pid: Number(m[1]), ppid: Number(m[2]), command: m[2 + extra + 1] };
+    if (extra >= 1) info.pgid = Number(m[3]);
+    if (extra >= 2) info.sid = Number(m[4]);
+    out.push(info);
   }
   return out;
 }
