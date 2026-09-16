@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- docs: the README is rewritten as a landing page — a centred hero with the tagline, badges, the
+  capture, four blocks on what it does for a machine agents ship to, and the trust material and
+  `What leaves the machine` table moved up above the configuration reference. Nothing that was
+  true is gone: the long reference parts (the full option list, the commented config file, the
+  access-log line, the key list, the subpaths) are folded into `<details>` instead. The
+  `package.json` description is the tagline, which is the first line on the npm page.
+
 ## 0.5.0
 
 - **Fixed: `codex exec "hi"` never opened a window, and failed every ten minutes for ever.** It

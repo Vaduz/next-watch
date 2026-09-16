@@ -1,65 +1,29 @@
-# next-watch
+<p align="center"><strong>next-watch</strong></p>
 
-A terminal dashboard for a machine that runs somebody else's commits. It watches a remote branch,
-pulls it, restarts only the servers the incoming files actually affect, and draws one screen that
-redraws in place. It is built for the case where **the machine that runs the code is not the
-machine the code is written on** — a spare box, a second laptop, a machine on the desk that serves
-a site while the work happens elsewhere. Nobody is typing there, so the watch has to be able to
-explain itself afterwards, and it must never do anything destructive on its own.
+<h1 align="center">Mission control for the machine your agents ship to.</h1>
 
-## Install and start
+<p align="center">
+Watches the branch, pulls, restarts only what changed, and keeps Claude and Codex sessions alive
+with their five-hour windows open — on one screen that never needs a person at the keyboard.
+</p>
+
+<p align="center">
+<a href="https://www.npmjs.com/package/next-watch"><img alt="npm" src="https://img.shields.io/npm/v/next-watch"></a>
+<a href="./LICENSE"><img alt="license" src="https://img.shields.io/npm/l/next-watch"></a>
+<img alt="node" src="https://img.shields.io/node/v/next-watch">
+<img alt="dependencies" src="https://img.shields.io/badge/dependencies-1%20(yargs)-blue">
+</p>
 
 ```sh
 bun add -d next-watch
 bunx next-watch --start dev
 ```
 
-With npm instead:
+With npm instead: `npm install --save-dev next-watch`, then `npx next-watch --start dev`.
 
-```sh
-npm install --save-dev next-watch
-npx next-watch --start dev
-```
+## The screen
 
-**Node 22 or later is all that is needed to run it** — the package is plain ESM with one
-dependency (`yargs`), and bun is the toolchain, not a requirement. In a Next.js project set up the
-usual way, that second line is the whole setup: no config file, no adapter to write.
-
-The first thing worth running is the one that changes nothing:
-
-```sh
-bunx next-watch --once --dry-run --start dev
-```
-
-It prints what a pull would bring and what would restart, and spawns nothing at all.
-
-`--start <script>` makes an npm script a server of this watch. It is started when the watch
-starts, stopped when the watch stops, restarted when a pull brings in something it serves, and its
-output goes to that server's log pane. The flag is repeatable — `--start web --start admin`.
-
-For a server that has to be built first, `--build <script>` runs that script **before** anything
-is stopped, and a build that fails leaves the running server alone and says so. That makes the
-production shape:
-
-```sh
-bunx next-watch --start start --build build
-```
-
-The package manager is the one the project already installs with, read from the lockfile:
-`bun.lock` (or `bun.lockb`) → bun, `pnpm-lock.yaml` → pnpm, `yarn.lock` → yarn,
-`package-lock.json` → npm, and npm where there is none. A checkout holding more than one lockfile
-is read in that order, so a repository that moved to bun and left `package-lock.json` behind is a
-bun repository. The install that follows a pull uses the same reading — `<pm> install`, with the
-lockfile read at that moment, because the pull that swaps one lockfile for another is exactly the
-pull that moves the dependencies. `packageManager` in `package.json` (corepack) is not consulted.
-
-With no config file, the rest is derived: `appName` is the `name` in `package.json` (or the
-directory's name), `root` is the working directory, `branch` is `main`, the remote is
-`origin/main`, and a dependency change is `package.json` or whichever lockfile is there.
-
-## What you see, and what you can do
-
-One screen, redrawn in place. This is a real one, watching a throwaway project with one described
+**This is a real screen, not a mockup.** It is watching a throwaway project with one described
 server and three of the optional sections turned on — the agent sessions, the service status, and
 the quota session, on a schedule for Claude and automatic for Codex:
 
@@ -96,7 +60,17 @@ the quota session, on a schedule for Claude and automatic for Codex:
   ⠋ Tab select · up/down scroll · (h)elp · (q)uit
 ```
 
-What the sections are. The first five are the repository itself and are always drawn:
+- **SESSION** — who is doing what right now, with the model, the context used and how long it has
+  been idle.
+- **`session:` under each SERVICE row** — which five-hour window this machine is keeping open, and
+  what it is waiting for.
+- **SERVER** — what is up, at which URL, owned by which pid, in which mode.
+- **The event log** — why anything restarted, kept across restarts of the watch itself.
+
+<details>
+<summary>Every section the panel can draw</summary>
+
+The first five are the repository itself and are always drawn:
 
 - **Repository** — where it is watching, the branch, `HEAD`, and how far behind the remote it is.
 - **Pulls** — each one names the commits it brought, with subjects, authors and the diff size, so
@@ -120,76 +94,174 @@ one of them is drawn except the last, which waits for `--quota-session`**; with 
 - **Quota windows** — how much of each usage window is spent, and when it resets.
 - **Service status** — the public status pages of the services those CLIs depend on.
 - **Tool versions** — the installed CLI versions against the newest published release.
-- **The CLIs keep themselves up to date.** When Claude Code or Codex publishes a release, the
-  watch installs it and says so: `claude 2.1.280 is out (installed 2.1.273), updating ...`, the
-  installer's own output as it arrives, then `claude 2.1.273 -> 2.1.280` once the new version
-  reads back. One CLI at a time, once per release, and never while something else is running. It
-  is **on by default**, and `tools: { autoUpdate: false }` keeps the version rows and the
-  `(u)pdate` verb while installing nothing on its own.
 - **ssh-agent** — whether a key is loaded, because without one a pull over SSH simply fails.
-- **Opening a closed quota window** — the one section that _spends_ something: it starts a session
-  of its own (`claude -p "hi"`, `codex exec "hi"`) in an empty sandbox directory. **Off unless
-  asked for**, with `--quota-session` or `providers.quotaSession`. It works two ways:
-  - **automatic** (`quotaSession: true`) — open a window whenever one is found closed, which keeps
-    one running around the clock.
-  - **on a schedule** (`quotaSession: { at: ['09:00', '14:00'] }`, or `--quota-session-at`) — open
-    one only at those times, read in the watch's own clock (`timezoneOffsetMinutes`). **`at` turns
-    the automatic mode off**: between the listed times a closed window stays closed. That is the
-    point of it — a window opened at 04:00 is spent by the time the day starts. Nothing is made up
-    for a time that passed while the watch was not running, each listed time fires at most once a
-    day, and a time that comes round while a window is already open sends nothing and says so.
-
-  It covers **both CLIs**, each decided on its own window, and a key per CLI says something
-  different about one of them: `{ claude: { at: [...] }, codex: false }`. A CLI that is not
-  installed is skipped with one line in the log. Codex is sent
-  `codex exec --skip-git-repo-check "hi"`, because the sandbox is deliberately not a git
-  repository and Codex refuses to run outside one without that flag.
-
-  **One message per window, and retries only after a failure.** A send that works is remembered
-  against the clock, so the window it opened is left alone for its whole five hours however long
-  the usage figures take to agree — they are cached, and a percentage that still rounds to zero
-  is not an empty window. A send that **fails** is tried again ten minutes later, three times,
-  and then nothing more until a window opens; the line under the service row says which
-  (`failed 17:08 (exit 1) · retry 17:18`).
-
-  Either way, each row of the **service status** carries a second line saying which mode is on for
-  that CLI and what it is waiting for — `session: manual · next refresh 14:00`, or `session: off` —
-  so a setting that spends something can be read off the screen instead of out of the config file.
-
-On a terminal the screen is operable, not only readable. Tab moves a cursor between the things on
-it, and a verb runs on whatever the cursor is on:
-
-- **Restart, stop or start a server** — through that server's own adapter, which is the same path
-  a pull takes, so the two cannot drift apart.
-- **Kill or stop a task** — SIGKILL or SIGTERM to the pid the task list gave.
-- **Restart an agent session** — SIGTERM, then its resume command is typed back into the same tmux
-  pane, so the session comes back where it was.
-- **Open a service's status page** in a browser.
-- **Update a tool** — install the newest release of that CLI.
-- **Focus a log pane** so it fills the frame, and again to go back.
-- **Run `ssh-add`** — offered only while the agent holds no key, and the terminal is handed over
-  properly so the passphrase is typed to `ssh-add` and not to the watcher.
-- **Quit**, which is **refused once while something is running**, so a single Ctrl-C does not
-  strand a half-stopped server. Press it again to leave anyway.
-
-The full key list, which `(h)elp` also prints:
-
-```
-Tab / Shift-Tab  move the cursor · up/down  scroll the log pane · Esc  clear
-press the letter in ( ) to run that verb on what the cursor is on
-":" types a whole verb instead
-server: (r)estart | (s)top | st(a)rt · task: (k)ill | (s)top
-session: (r)estart | (s)top · service: (o)pen · tool: (u)pdate
-session (r)estart = SIGTERM, then type its resume command back
-into the same tmux pane
-log pane: (f)ocus to fill the frame, again to go back
-ssh: (a)dd  run ssh-add here (only shown while the agent has no key)
-anywhere: (h)elp | (q)uit
-```
+- **Opening a closed quota window** — the one section that _spends_ something. **Off unless asked
+  for**, with `--quota-session` or `providers.quotaSession`.
 
 Rows that overflow are **wrapped, not cut** — the tail of a line is where the error message and
 the URL are. Off a terminal (a pipe, a log file) the panel is printed only when its content
 actually changed, so a redirected watch does not fill a file with one panel a second.
+
+The agent-session section finds Codex sessions by reading `/proc`, so **that half is Linux only**;
+elsewhere those rows are simply absent and the watch carries on. tmux not being present is equally
+ordinary — it only costs those rows their restart verb.
+
+</details>
+
+## Built for agent teams
+
+|                                                                                                                                                                       |                                                                                                                                                                                      |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **See every agent.**<br>Live Claude and Codex sessions on this machine — model, context, idle time. Restart one and it comes back in the same tmux pane where it was. | **Never lose a window.**<br>Five-hour usage windows kept open automatically, or on your schedule. One message per window, in an empty sandbox, and the screen says which mode is on. |
+| **Ship the moment they push.**<br>Pull, install if the lockfile moved, restart only the servers the incoming files touch, and log what came in and why.               | **Stay current without thinking.**<br>Claude Code and Codex update themselves between jobs, one at a time, once per release. Off with one line.                                      |
+
+### Never lose a window, in detail
+
+A window opens with its first message and closes five hours later, so time spent with it shut
+comes straight off the day's allowance. next-watch can open one for you, in an empty sandbox
+directory rather than in your repository, so the message costs one word instead of pulling a whole
+project's instructions into a context. It works two ways:
+
+- **automatic** (`quotaSession: true`) — open a window whenever one is found closed, which keeps
+  one running around the clock.
+- **on a schedule** (`quotaSession: { at: ['09:00', '14:00'] }`, or `--quota-session-at`) — open
+  one only at those times, read in the watch's own clock (`timezoneOffsetMinutes`). **`at` turns
+  the automatic mode off**: between the listed times a closed window stays closed. That is the
+  point of it — a window opened at 04:00 is spent by the time the day starts.
+
+<details>
+<summary>The rules it follows, exactly</summary>
+
+Nothing is made up for a time that passed while the watch was not running, each listed time fires
+at most once a day, and a time that comes round while a window is already open sends nothing and
+says so.
+
+It covers **both CLIs**, each decided on its own window, and a key per CLI says something
+different about one of them: `{ claude: { at: [...] }, codex: false }`. A CLI that is not installed
+is skipped with one line in the log. Codex is sent `codex exec --skip-git-repo-check "hi"`, because
+the sandbox is deliberately not a git repository and Codex refuses to run outside one without that
+flag.
+
+**One message per window, and retries only after a failure.** A send that works is remembered
+against the clock, so the window it opened is left alone for its whole five hours however long the
+usage figures take to agree — they are cached, and a percentage that still rounds to zero is not an
+empty window. A send that **fails** is tried again ten minutes later, three times, and then nothing
+more until a window opens; the line under the service row says which
+(`failed 17:08 (exit 1) · retry 17:18`).
+
+Either way, each row of the **service status** carries a second line saying which mode is on for
+that CLI and what it is waiting for — `session: manual · next refresh 14:00`, or `session: off` —
+so a setting that spends something can be read off the screen instead of out of the config file.
+
+</details>
+
+### Stay current without thinking, in detail
+
+When Claude Code or Codex publishes a release, the watch installs it and says so:
+`claude 2.1.280 is out (installed 2.1.273), updating ...`, the installer's own output as it
+arrives, then `claude 2.1.273 -> 2.1.280` once the new version reads back. One CLI at a time, once
+per release, and never while something else is running. It is **on by default**, and
+`tools: { autoUpdate: false }` keeps the version rows and the `(u)pdate` verb while installing
+nothing on its own.
+
+## Nobody is typing there
+
+It is built for the case where **the machine that runs the code is not the machine the code is
+written on** — a spare box, a second laptop, a machine on the desk that serves a site while the
+work happens elsewhere. Nobody is at that keyboard, so the watch has to be able to explain itself
+afterwards, and it must never do anything destructive on its own.
+
+- **Blocked paths stop a pull and ask for a person.** Letting git overwrite a file a running
+  process holds open is not a conflict, it is destruction.
+- **Build before stop.** A build that fails leaves the running server serving, and says so.
+- **Quit is refused once** while something is running, so a single Ctrl-C does not strand a
+  half-stopped server.
+- **A detached server is adopted only when its pid note still describes the live process** — alive,
+  signalable by this user, running something whose command line still names the script, and, on
+  Linux, started at the moment recorded.
+- **Stopping a server stops its own session**, not the jobs it started. A `detached: true` spawn
+  calls `setsid`, so it is a descendant by parentage only; it is left running and the event log
+  names it.
+- **`git fetch` runs in a way that cannot raise an authentication prompt.** On a checkout whose
+  remote is https and with nobody at the terminal, git would otherwise hang asking for credentials
+  and the watch would die without a word.
+
+### What leaves the machine
+
+Nothing at all until a provider is switched on — **except on a run with no config file**, where
+every section but `quotaSession` is on and this is the traffic that follows. With all of them on,
+and never more often than this:
+
+| Where                                                                 | What for                          | How often                                                                                              | Off with                               |
+| --------------------------------------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------- |
+| `api.anthropic.com/api/oauth/usage`                                   | the usage windows                 | at most once a minute, and not at all while a cache written by something else on this machine is fresh | `quota: false`                         |
+| `codex app-server` (a local process, not the network)                 | the same, for the other CLI       | at most once a minute                                                                                  | `quota: false`                         |
+| `status.claude.com`, `status.openai.com`                              | the public status summaries       | at most once a minute                                                                                  | `services: false`                      |
+| `api.github.com/repos/<repo>/releases/latest`                         | the newest published version      | at most once every ten minutes                                                                         | `tools: false`                         |
+| `claude update`, `codex update` (local processes)                     | installing a release that is out  | at most once per release published upstream                                                            | `tools: { autoUpdate: false }`         |
+| `claude -p "hi"` (a local process, through the CLI's own credentials) | opening a closed five-hour window | at most once per closed window, or once per listed time                                                | `quotaSession: false`, `claude: false` |
+| `codex exec --skip-git-repo-check "hi"` (the same, for the other CLI) | the same                          | the same                                                                                               | `quotaSession: false`, `codex: false`  |
+
+The install is the one row where **the watch itself opens no connection**: it runs that CLI's own
+update command and reads its output. Where a CLI fetches its release from is that CLI's own
+business, and this package chooses nothing about it.
+
+Every one of them has a timeout, none of them can throw, and a failure costs its own section and
+nothing else. The credentials the quota reads are the ones the CLI already wrote on this machine;
+the token goes to the endpoint that issued it and reaches no log, no event and no file.
+
+## How it works
+
+```mermaid
+flowchart LR
+  A["origin/main"] --> B["pull"]
+  B --> C["install, if the lockfile moved"]
+  C --> D["restart the servers whose paths changed"]
+  D --> E["event log"]
+```
+
+## Zero config
+
+**Node 22 or later is all that is needed to run it** — the package is plain ESM with one
+dependency (`yargs`), and bun is the toolchain, not a requirement. In a Next.js project set up the
+usual way, `bunx next-watch --start dev` is the whole setup: no config file, no adapter to write.
+
+The first thing worth running is the one that changes nothing:
+
+```sh
+bunx next-watch --once --dry-run --start dev
+```
+
+It prints what a pull would bring and what would restart, and spawns nothing at all.
+
+`--start <script>` makes an npm script a server of this watch. It is started when the watch starts,
+stopped when the watch stops, restarted when a pull brings in something it serves, and its output
+goes to that server's log pane. The flag is repeatable — `--start web --start admin`.
+
+For a server that has to be built first, `--build <script>` runs that script **before** anything is
+stopped, and a build that fails leaves the running server alone and says so. That makes the
+production shape:
+
+```sh
+bunx next-watch --start start --build build
+```
+
+With no config file, the rest is derived: `appName` is the `name` in `package.json` (or the
+directory's name), `root` is the working directory, `branch` is `main`, the remote is
+`origin/main`, and a dependency change is `package.json` or whichever lockfile is there.
+
+<details>
+<summary>Which package manager it uses, and why that one</summary>
+
+The package manager is the one the project already installs with, read from the lockfile:
+`bun.lock` (or `bun.lockb`) → bun, `pnpm-lock.yaml` → pnpm, `yarn.lock` → yarn,
+`package-lock.json` → npm, and npm where there is none. A checkout holding more than one lockfile
+is read in that order, so a repository that moved to bun and left `package-lock.json` behind is a
+bun repository. The install that follows a pull uses the same reading — `<pm> install`, with the
+lockfile read at that moment, because the pull that swaps one lockfile for another is exactly the
+pull that moves the dependencies. `packageManager` in `package.json` (corepack) is not consulted.
+
+</details>
 
 ## Config
 
@@ -209,13 +281,14 @@ function that prepares something — though most servers need none of that.
 
 **A server is either described or written out.** Describing one is naming its npm script and the
 handful of decisions around it; `{ id: 'dev', script: 'dev' }` is exactly what `--start dev`
-builds, and a described server **is started when the watch starts**, because next-watch spawns
-that child itself. Writing one out is supplying the four functions yourself, for a repository
-whose starting and stopping are its own business — those are left alone at startup, since whether
-such a server is already running is not something to decide on its behalf. The two forms may be
-mixed in one `servers` array.
+builds, and a described server **is started when the watch starts**, because next-watch spawns that
+child itself. Writing one out is supplying the four functions yourself, for a repository whose
+starting and stopping are its own business — those are left alone at startup, since whether such a
+server is already running is not something to decide on its behalf. The two forms may be mixed in
+one `servers` array.
 
-Everything optional below is commented out, with what turning it on gives you:
+<details>
+<summary>The config file, every option commented</summary>
 
 ```js
 import { restartUnless } from 'next-watch/core';
@@ -355,6 +428,8 @@ export default {
 };
 ```
 
+</details>
+
 Then run it:
 
 ```sh
@@ -366,33 +441,71 @@ the file's own `servers`, and an id that is already taken is refused rather than
 `--build` belongs to the servers named on the command line — a described entry carries its own.
 `providers` in the file always wins over what a flag would have switched on.
 
-**`detached: true` is for a server that should not go down when the dashboard does.** It is
-spawned into its own process group with its output going straight to its log file, and a note is
-left in `<logDir>/servers/<id>.pid`. The next watch reads that note and **adopts** the process it
-names — so reopening the dashboard shows the running server rather than failing to start a second
-one onto a taken port. It is deliberately **not** stopped when the watch exits; stopping it is
-something a person asks for, with `(s)top` on the screen.
+Two things a repository often reaches for are already above and need nothing new: `pull.blocked` is
+where paths that must never arrive go, and `afterPull` is where a command that has to run once a
+pull has landed goes. `--once --dry-run` prints what a pull would bring, which servers would
+restart, and — for a described server — the steps each restart would take, without running any of
+them.
+
+<details>
+<summary><code>detached: true</code>, and how a running server is adopted</summary>
+
+**`detached: true` is for a server that should not go down when the dashboard does.** It is spawned
+into its own process group with its output going straight to its log file, and a note is left in
+`<logDir>/servers/<id>.pid`. The next watch reads that note and **adopts** the process it names —
+so reopening the dashboard shows the running server rather than failing to start a second one onto
+a taken port. It is deliberately **not** stopped when the watch exits; stopping it is something a
+person asks for, with `(s)top` on the screen.
 
 The note is only trusted when the process it names is still the one it was written about: alive,
 signalable by this user, running something whose command line still names the script, and — on
 Linux, where `/proc` says so — started at the moment recorded. Pids get reused, and a note is a
 hint about the world rather than a fact.
 
-Stopping a server stops **its own session** — the server and everything it forked to do its work.
-A job the server started in a session of its own (a `detached: true` spawn, which calls `setsid`)
-is a descendant by parentage only, so it is left running and the event log names it.
+</details>
 
-Two things a repository often reaches for are already above and need nothing new: `pull.blocked`
-is where paths that must never arrive go, and `afterPull` is where a command that has to run once
-a pull has landed goes. `--once --dry-run` prints what a pull would bring, which servers would
-restart, and — for a described server — the steps each restart would take, without running any of
-them.
+## Keys and verbs
 
-The agent-session section finds Codex sessions by reading `/proc`, so **that half is Linux only**;
-elsewhere those rows are simply absent and the watch carries on. tmux not being present is equally
-ordinary — it only costs those rows their restart verb.
+On a terminal the screen is operable, not only readable. Tab moves a cursor between the things on
+it, and a verb runs on whatever the cursor is on.
 
-## Options
+<details>
+<summary>Every verb, and the full key list</summary>
+
+- **Restart, stop or start a server** — through that server's own adapter, which is the same path
+  a pull takes, so the two cannot drift apart.
+- **Kill or stop a task** — SIGKILL or SIGTERM to the pid the task list gave.
+- **Restart an agent session** — SIGTERM, then its resume command is typed back into the same tmux
+  pane, so the session comes back where it was.
+- **Open a service's status page** in a browser.
+- **Update a tool** — install the newest release of that CLI.
+- **Focus a log pane** so it fills the frame, and again to go back.
+- **Run `ssh-add`** — offered only while the agent holds no key, and the terminal is handed over
+  properly so the passphrase is typed to `ssh-add` and not to the watcher.
+- **Quit**, which is **refused once while something is running**, so a single Ctrl-C does not
+  strand a half-stopped server. Press it again to leave anyway.
+
+The full key list, which `(h)elp` also prints:
+
+```
+Tab / Shift-Tab  move the cursor · up/down  scroll the log pane · Esc  clear
+press the letter in ( ) to run that verb on what the cursor is on
+":" types a whole verb instead
+server: (r)estart | (s)top | st(a)rt · task: (k)ill | (s)top
+session: (r)estart | (s)top · service: (o)pen · tool: (u)pdate
+session (r)estart = SIGTERM, then type its resume command back
+into the same tmux pane
+log pane: (f)ocus to fill the frame, again to go back
+ssh: (a)dd  run ssh-add here (only shown while the agent has no key)
+anywhere: (h)elp | (q)uit
+```
+
+</details>
+
+## Reference
+
+<details>
+<summary>Every command-line option</summary>
 
 ```
 next-watch [options]
@@ -438,7 +551,10 @@ the pull starts it, and the process exiting a moment later stops it again.)
 Note that **which sections the panel draws is not a flag**. Those are `providers` switches in the
 config file, because they describe the machine rather than this particular run.
 
-## The access-log panes
+</details>
+
+<details>
+<summary>The access-log panes, and writing that line yourself</summary>
 
 Each server gets a pane showing the tail of its log, newest at the bottom. The line it reads is
 the one a Next.js dev server writes:
@@ -465,35 +581,10 @@ export function register() {
 Where nothing in a log parses as a request, the raw tail is shown instead: the startup and error
 lines are worth more there than an empty box.
 
-## What leaves the machine
+</details>
 
-Nothing at all until a provider is switched on — **except on a run with no config file**, where
-every section but `quotaSession` is on and this is the traffic that follows. With all of them on,
-and never more often than this:
-
-| Where                                                                 | What for                          | How often                                                                                              | Off with                               |
-| --------------------------------------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------- |
-| `api.anthropic.com/api/oauth/usage`                                   | the usage windows                 | at most once a minute, and not at all while a cache written by something else on this machine is fresh | `quota: false`                         |
-| `codex app-server` (a local process, not the network)                 | the same, for the other CLI       | at most once a minute                                                                                  | `quota: false`                         |
-| `status.claude.com`, `status.openai.com`                              | the public status summaries       | at most once a minute                                                                                  | `services: false`                      |
-| `api.github.com/repos/<repo>/releases/latest`                         | the newest published version      | at most once every ten minutes                                                                         | `tools: false`                         |
-| `claude update`, `codex update` (local processes)                     | installing a release that is out  | at most once per release published upstream                                                            | `tools: { autoUpdate: false }`         |
-| `claude -p "hi"` (a local process, through the CLI's own credentials) | opening a closed five-hour window | at most once per closed window, or once per listed time                                                | `quotaSession: false`, `claude: false` |
-| `codex exec --skip-git-repo-check "hi"` (the same, for the other CLI) | the same                          | the same                                                                                               | `quotaSession: false`, `codex: false`  |
-
-The install is the one row where **the watch itself opens no connection**: it runs that CLI's own
-update command and reads its output. Where a CLI fetches its release from is that CLI's own
-business, and this package chooses nothing about it.
-
-Every one of them has a timeout, none of them can throw, and a failure costs its own section and
-nothing else. The credentials the quota reads are the ones the CLI already wrote on this machine;
-the token goes to the endpoint that issued it and reaches no log, no event and no file.
-
-`git fetch` runs in a way that **cannot raise an authentication prompt**. On a checkout whose
-remote is https and with nobody at the terminal, git would otherwise hang asking for credentials
-and the watch would die without a word.
-
-## Subpaths
+<details>
+<summary>Subpaths you can import</summary>
 
 | Import                  | What it is                                                          |
 | ----------------------- | ------------------------------------------------------------------- |
@@ -505,12 +596,17 @@ and the watch would die without a word.
 | `next-watch/quota`      | the quota shapes and arithmetic. **Pure — safe in a browser**       |
 | `next-watch/quota/io`   | reading that quota from the credentials, the endpoint and the cache |
 
+</details>
+
 ## Development
 
 The toolchain is [bun](https://bun.sh): `bun install`, then `bun run lint`, `bun run typecheck`,
 `bun test`, `bun run build`. **Using the package needs only node 22 or later** — what is published
 is plain ESM, and it runs under bun as well.
 
-## License
+---
 
-Apache-2.0. See [LICENSE](./LICENSE) and [NOTICE](./NOTICE).
+<p align="center">
+Node 22 or later · <a href="./LICENSE">Apache-2.0</a> (<a href="./NOTICE">NOTICE</a>) · built for
+a spare box on the desk.
+</p>

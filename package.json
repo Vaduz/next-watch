@@ -1,7 +1,7 @@
 {
   "name": "next-watch",
   "version": "0.5.0",
-  "description": "A terminal dashboard that watches a Next.js repository: pulls origin, restarts dev servers, and shows what is happening on one screen.",
+  "description": "Mission control for the machine your agents ship to.",
   "license": "Apache-2.0",
   "type": "module",
   "engines": {
