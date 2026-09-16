@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.0
 
 - **Fixed: `codex exec "hi"` never opened a window, and failed every ten minutes for ever.** It
   exited 1 in a tenth of a second, saying it was not inside a trusted directory and that
