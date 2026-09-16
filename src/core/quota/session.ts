@@ -9,9 +9,6 @@
 import type { QuotaCard, QuotaWindowView } from '../types.js';
 import type { QuotaSessionProbe } from './view.js';
 
-/** Which backend has the session window. */
-const CLAUDE_LABEL = 'Claude';
-
 /** The name of the session window, kept as a copy so this module needs no io import. */
 const SESSION_WINDOW_NAME = '5h';
 
@@ -52,9 +49,6 @@ export function sessionWindowOf(cards: readonly QuotaCard[], label: string): Quo
   if (card === undefined || card.windows.length === 0) return null;
   return sessionWindow(card);
 }
-
-/** The label of the backend whose window `claude -p` opens. */
-export { CLAUDE_LABEL };
 
 /** One line of **evidence** for reading it as closed.
  *
@@ -97,7 +91,8 @@ export interface QuotaSessionStart {
   probe: QuotaSessionProbe;
 }
 
-/** Whether to open the session window now, or null for no.
+/** Whether to open the session window now, or null for no. `label` is the backend whose window
+ *  it is (`Claude`, `Codex`), so one decision serves both CLIs.
  *
  *  With no card, or a card whose windows could not be read at all, nothing is decided: an
  *  unreadable window and a closed one are indistinguishable, and **the answer when it is
@@ -106,8 +101,9 @@ export function quotaSessionToStart(
   cards: readonly QuotaCard[],
   probe: QuotaSessionProbe | null,
   nowMs: number,
+  label: string,
 ): QuotaSessionStart | null {
-  const card = cards.find(c => c.label === CLAUDE_LABEL);
+  const card = cards.find(c => c.label === label);
   if (card === undefined || card.windows.length === 0) return null;
   const window = sessionWindow(card);
   const shape = closedShape(window, nowMs);

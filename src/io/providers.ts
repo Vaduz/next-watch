@@ -12,14 +12,14 @@
  *     machine.
  *   - `quota` reads the credentials on disk and may call the usage endpoint. It prefers a cache
  *     another program on the machine wrote, so the endpoint is asked as little as possible.
- *   - `quotaSession` **starts a session of its own** (`claude -p`) when the five-hour window is
- *     closed, in a sandbox directory. It is the only switch here that spends anything. With
- *     `at`, it does so only at the times listed there.
+ *   - `quotaSession` **starts a session of its own** (`claude -p`, `codex exec`) when a CLI's
+ *     five-hour window is closed, in a sandbox directory. It is the only switch here that spends
+ *     anything. With `at`, it does so only at the times listed there.
  *   - `services` and `tools` reach GitHub and the status pages at a fixed interval.
  *   - `sshAgent` runs `ssh-add -l`, and lets a person add a key from the screen. */
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parseScheduleTimes, type ScheduledTime } from '../core/quota/schedule.js';
+import { quotaSessionPlans, type QuotaSessionPlan, type QuotaSessionSwitch } from '../core/quota/sessionConfig.js';
 import type { AgentSessionRow, QuotaCard, ServiceCard, SshAgentCard, ToolVersionRow } from '../core/types.js';
 import { clientName } from './http.js';
 import { liveAgentSessions } from './sessions/index.js';
@@ -56,14 +56,17 @@ export interface WatchProviders {
   agentSessions?: boolean;
   /** The usage quota per backend. */
   quota?: boolean;
-  /** Open a closed five-hour quota window with `claude -p`. The default `cwd` is an empty
-   *  directory under the temp directory: starting it inside a repository would put that
-   *  repository's instructions into the context of a message whose only purpose is to exist.
+  /** Open a closed five-hour quota window: `claude -p` for Claude, `codex exec` for Codex. The
+   *  default `cwd` is an empty directory under the temp directory — starting it inside a
+   *  repository would put that repository's instructions into the context of a message whose
+   *  only purpose is to exist.
    *
    *  `at: ['09:00', '14:00']` opens one **only at those times** (in the watch's clock) and
    *  **turns the automatic mode off**: between them a closed window stays closed. That is the
-   *  point of a schedule — a window opened at 04:00 is spent by the time the day starts. */
-  quotaSession?: boolean | { cwd?: string; at?: readonly string[] };
+   *  point of a schedule — a window opened at 04:00 is spent by the time the day starts. A key
+   *  per CLI (`claude`, `codex`) says something different about one of them; see
+   *  `core/quota/sessionConfig.ts`. */
+  quotaSession?: QuotaSessionSwitch;
   /** The public status pages. Defaults to the two the CLIs depend on. */
   services?: boolean | readonly ServiceSpec[];
   /** The installed CLI versions, and installing a new release. */
@@ -80,9 +83,9 @@ export interface WatchProviders {
  *  The sections that only look cost a `ps`, a read of the credentials on disk, and two status
  *  pages a minute.
  *
- *  `quotaSession` is not one that only looks: it **starts a session of its own** (`claude -p`)
- *  to open a closed five-hour window. Spending something is not a default, so it waits to be
- *  asked for with `--quota-session`. */
+ *  `quotaSession` is not one that only looks: it **starts a session of its own** (`claude -p`,
+ *  `codex exec`) to open a closed five-hour window. Spending something is not a default, so it
+ *  waits to be asked for with `--quota-session`. */
 export function zeroConfigProviders(o: { quotaSession: boolean; quotaSessionAt: readonly string[] }): WatchProviders {
   return {
     agentSessions: true,
@@ -106,13 +109,14 @@ export interface ResolvedProviders {
   sshAgent?: () => Promise<SshAgentCard | null>;
   /** The tools the watcher installs new releases of itself. Empty when none. */
   autoUpdate: readonly string[];
-  /** Where to open a quota window, and how to read the quota to know it is closed. Null when
-   *  that is off. **Reading the quota here does not require the `quota` section**: the two go
-   *  through the same cache, so nothing is fetched twice.
+  /** Where to open a quota window, how to read the quota to know it is closed, and which CLIs
+   *  it is on for. Null when it is off for all of them. **Reading the quota here does not
+   *  require the `quota` section**: the two go through the same cache, so nothing is fetched
+   *  twice.
    *
-   *  `at` holds the listed times as minutes since midnight, already checked, or null for the
-   *  automatic mode. */
-  quotaSession: { cwd: string; at: readonly ScheduledTime[] | null; read: () => Promise<QuotaCard[]> } | null;
+   *  Each plan's `at` holds the listed times as minutes since midnight, already checked, or
+   *  null for the automatic mode. */
+  quotaSession: { cwd: string; plans: readonly QuotaSessionPlan[]; read: () => Promise<QuotaCard[]> } | null;
 }
 
 /** What a `boolean | T[]` switch means: off, the default list, or the given list. */
@@ -121,20 +125,18 @@ function listOf<T>(switched: boolean | readonly T[] | undefined, fallback: reado
   return switched === true ? fallback : switched;
 }
 
-/** Where the quota-opening session runs and when, or null when it is off. The times are checked
- *  here rather than where they are used, so a mistyped `09:0` stops the watch at startup instead
- *  of at nine o'clock. */
+/** Where the quota-opening session runs and for which CLIs, or null when it is off for all of
+ *  them. The times are checked here rather than where they are used, so a mistyped `09:0` stops
+ *  the watch at startup instead of at nine o'clock. */
 function quotaSessionSetting(
   switched: WatchProviders['quotaSession'],
   appName: string,
   where: string,
-): { cwd: string; at: readonly ScheduledTime[] | null } | null {
-  if (switched === undefined || switched === false) return null;
-  if (switched === true) return { cwd: join(tmpdir(), appName), at: null };
-  return {
-    cwd: switched.cwd ?? join(tmpdir(), appName),
-    at: switched.at === undefined ? null : parseScheduleTimes(switched.at, where),
-  };
+): { cwd: string; plans: readonly QuotaSessionPlan[] } | null {
+  const plans = quotaSessionPlans(switched, where);
+  if (plans.length === 0) return null;
+  const given = typeof switched === 'object' ? switched.cwd : undefined;
+  return { cwd: given ?? join(tmpdir(), appName), plans };
 }
 
 /** Turn the switches into readers. `appName` names the cache directory and identifies this

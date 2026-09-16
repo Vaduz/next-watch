@@ -26,17 +26,20 @@ export type FiredTimes = Readonly<Record<number, string>>;
  *  guessing at the format. */
 const TIME = /^([01][0-9]|2[0-3]):([0-5][0-9])$/;
 
-/** Read the listed times, or say what is wrong with them. `where` names the source (the config
- *  file's path, or the flag), because the commonest mistake is not knowing which of the two the
- *  watcher actually read. */
-export function parseScheduleTimes(at: readonly unknown[], where: string): ScheduledTime[] {
+/** Read the listed times, or say what is wrong with them. `where` names **exactly which list**
+ *  (the config file's path and the key inside it, or the flag), because the commonest mistake is
+ *  not knowing which of several the watcher actually read. */
+export function parseScheduleTimes(at: unknown, where: string): ScheduledTime[] {
+  if (!Array.isArray(at)) {
+    throw new Error(`${where}: must be a list of times, like ['09:00', '14:00']`);
+  }
   if (at.length === 0) {
-    throw new Error(`${where}: quotaSession.at needs at least one time, or leave it out for the automatic mode`);
+    throw new Error(`${where}: needs at least one time, or leave it out for the automatic mode`);
   }
   const minutes: ScheduledTime[] = [];
-  for (const raw of at) {
+  for (const raw of at as unknown[]) {
     if (typeof raw !== 'string') {
-      throw new Error(`${where}: quotaSession.at takes times as strings like "09:00", not ${JSON.stringify(raw)}`);
+      throw new Error(`${where}: takes times as strings like "09:00", not ${JSON.stringify(raw)}`);
     }
     const found = TIME.exec(raw.trim());
     if (found === null) {
@@ -44,7 +47,7 @@ export function parseScheduleTimes(at: readonly unknown[], where: string): Sched
     }
     const value = Number(found[1]) * 60 + Number(found[2]);
     // Two entries for one time would fire once and leave the author believing it fired twice.
-    if (minutes.includes(value)) throw new Error(`${where}: "${raw}" is listed twice in quotaSession.at`);
+    if (minutes.includes(value)) throw new Error(`${where}: "${raw}" is listed twice`);
     minutes.push(value);
   }
   return minutes.sort((a, b) => a - b);

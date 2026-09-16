@@ -61,38 +61,39 @@ directory's name), `root` is the working directory, `branch` is `main`, the remo
 
 One screen, redrawn in place. This is a real one, watching a throwaway project with one described
 server and three of the optional sections turned on — the agent sessions, the service status, and
-the quota session on a schedule:
+the quota session, on a schedule for Claude and off for Codex:
 
 ```
-╭─ next-watch 0.3.0  12:03:49  up 16s ───────────────────────────────────────╮
+╭─ next-watch 0.3.0  12:15:41  up 16s ───────────────────────────────────────╮
 │ REPO     /tmp/nw-shot/site  main 2bc45b3  in sync with origin/main         │
 │          nothing pulled during this watch · next git check 3585s           │
 │                                                                            │
 │    SERVER  STATE  URL                    OWNER       MODE  UPTIME          │
-│    web     up     http://localhost:3400  pid 505877  bun      15s          │
+│    web     up     http://localhost:3400  pid 616201  bun      15s          │
 │                                                                            │
 │ SESSION  TREE        AGENT   STATUS  MODEL      CONTEXT  IDLE   VER        │
 │   What does the dev script in package.json…                                │
-│          site        codex   idle    -              15k     5m  0.154.0    │
-│   site-83                                                                  │
-│          site        claude  idle    opus-5         31k     5m  2.1.273    │
+│          site        codex   idle    -              15k     5s  0.154.0    │
+│   site-da                                                                  │
+│          site        claude  idle    opus-5         31k    17s  2.1.273    │
 │                                                                            │
 │    SERVICE  Claude  ●  All Systems Operational                             │
 │             session: manual · next refresh 16:00                           │
 │             OpenAI  ●  All Systems Operational                             │
+│             session: off                                                   │
 ├─ event log ────────────────────────────────────────────────────────────────┤
-│ 12:03:33 ◎ next-watch started (git every 3600s · keys on)                  │
-│ 12:03:34 ○ web: bun run dev                                                │
-│ 12:03:34 ○ web is listening on http://localhost:3400                       │
-│ 12:03:34 ◆ server web is up at http://localhost:3400 (bun)                 │
-│ 12:03:35 · quota: next scheduled session 16:00                             │
+│ 12:15:25 ◎ next-watch started (git every 3600s · keys on)                  │
+│ 12:15:25 ○ web: bun run dev                                                │
+│ 12:15:25 ○ web is listening on http://localhost:3400                       │
+│ 12:15:25 ◆ server web is up at http://localhost:3400 (bun)                 │
+│ 12:15:26 · quota: claude next scheduled session 16:00                      │
 ├─ web access  /tmp/nw-shot/site/log/web.txt ────────────────────────────────┤
 │           $ node server.mjs                                                │
-│ 12:03:38  GET                404  12ms  /missing                           │
-│ 12:03:39  GET                200  11ms  /                                  │
+│ 12:15:29  GET                404  12ms  /missing                           │
+│ 12:15:30  GET                200  11ms  /                                  │
 ╰────────────────────────────────────────────────────────────────────────────╯
 
-  ⠸ Tab select · up/down scroll · (h)elp · (q)uit
+  ⠼ Tab select · up/down scroll · (h)elp · (q)uit
 ```
 
 What the sections are. The first five are the repository itself and are always drawn:
@@ -121,8 +122,8 @@ one of them is drawn except the last, which waits for `--quota-session`**; with 
 - **Tool versions** — the installed CLI versions against the newest published release.
 - **ssh-agent** — whether a key is loaded, because without one a pull over SSH simply fails.
 - **Opening a closed quota window** — the one section that _spends_ something: it starts a session
-  of its own (`claude -p`) in an empty sandbox directory. **Off unless asked for**, with
-  `--quota-session` or `providers.quotaSession`. It works two ways:
+  of its own (`claude -p "hi"`, `codex exec "hi"`) in an empty sandbox directory. **Off unless
+  asked for**, with `--quota-session` or `providers.quotaSession`. It works two ways:
   - **automatic** (`quotaSession: true`) — open a window whenever one is found closed, which keeps
     one running around the clock.
   - **on a schedule** (`quotaSession: { at: ['09:00', '14:00'] }`, or `--quota-session-at`) — open
@@ -132,9 +133,13 @@ one of them is drawn except the last, which waits for `--quota-session`**; with 
     for a time that passed while the watch was not running, each listed time fires at most once a
     day, and a time that comes round while a window is already open sends nothing and says so.
 
-  Either way the Claude row of the **service status** carries a second line saying which mode is on
-  and what it is waiting for (`session: manual · next refresh 14:00`), so the setting can be read
-  off the screen instead of out of the config file.
+  It covers **both CLIs**, each decided on its own window, and a key per CLI says something
+  different about one of them: `{ claude: { at: [...] }, codex: false }`. A CLI that is not
+  installed is skipped with one line in the log.
+
+  Either way, each row of the **service status** carries a second line saying which mode is on for
+  that CLI and what it is waiting for — `session: manual · next refresh 14:00`, or `session: off` —
+  so a setting that spends something can be read off the screen instead of out of the config file.
 
 On a terminal the screen is operable, not only readable. Tab moves a cursor between the things on
 it, and a verb runs on whatever the cursor is on:
@@ -313,16 +318,20 @@ export default {
     // { command: 'claude', repo: 'anthropics/claude-code', autoUpdate: false },
     // ],
     //
-    // ⚠️ The only switch that spends anything: it sends `claude -p` to open a
-    // five-hour window that has closed, because a window left shut is a window
-    // off the day's total. It runs in an empty sandbox directory rather than in
-    // your repository, so the message costs one word instead of pulling a whole
-    // project's instructions into a context.
+    // ⚠️ The only switch that spends anything: it sends `claude -p "hi"` and
+    // `codex exec "hi"` to open a five-hour window that has closed, because a
+    // window left shut is a window off the day's total. It runs in an empty
+    // sandbox directory rather than in your repository, so the message costs
+    // one word instead of pulling a whole project's instructions into a
+    // context.
     // quotaSession: true,
     // Or only at these times, in this watch's own clock. Listing them turns
     // the "whenever it is found closed" behaviour off.
     // quotaSession: { at: ['06:00', '11:00', '16:00', '21:00'] },
-    // quotaSession: { cwd: '/tmp/my-site-sandbox' },  // where it runs
+    // A key per CLI says something different about one of them. What it does
+    // not name keeps whatever the outer setting says.
+    // quotaSession: { claude: { at: ['09:00'] }, codex: false },
+    // quotaSession: { cwd: '/tmp/my-site-sandbox' },  // where they run
   },
 };
 ```
@@ -439,12 +448,14 @@ Nothing at all until a provider is switched on — **except on a run with no con
 every section but `quotaSession` is on and this is the traffic that follows. With all of them on,
 and never more often than this:
 
-| Where                                                 | What for                     | How often                                                                                              | Off with          |
-| ----------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------- |
-| `api.anthropic.com/api/oauth/usage`                   | the usage windows            | at most once a minute, and not at all while a cache written by something else on this machine is fresh | `quota: false`    |
-| `codex app-server` (a local process, not the network) | the same, for the other CLI  | at most once a minute                                                                                  | `quota: false`    |
-| `status.claude.com`, `status.openai.com`              | the public status summaries  | at most once a minute                                                                                  | `services: false` |
-| `api.github.com/repos/<repo>/releases/latest`         | the newest published version | at most once every ten minutes                                                                         | `tools: false`    |
+| Where                                                                 | What for                          | How often                                                                                              | Off with                               |
+| --------------------------------------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------- |
+| `api.anthropic.com/api/oauth/usage`                                   | the usage windows                 | at most once a minute, and not at all while a cache written by something else on this machine is fresh | `quota: false`                         |
+| `codex app-server` (a local process, not the network)                 | the same, for the other CLI       | at most once a minute                                                                                  | `quota: false`                         |
+| `status.claude.com`, `status.openai.com`                              | the public status summaries       | at most once a minute                                                                                  | `services: false`                      |
+| `api.github.com/repos/<repo>/releases/latest`                         | the newest published version      | at most once every ten minutes                                                                         | `tools: false`                         |
+| `claude -p "hi"` (a local process, through the CLI's own credentials) | opening a closed five-hour window | at most once per closed window, or once per listed time                                                | `quotaSession: false`, `claude: false` |
+| `codex exec "hi"` (the same, for the other CLI)                       | the same                          | the same                                                                                               | `quotaSession: false`, `codex: false`  |
 
 Every one of them has a timeout, none of them can throw, and a failure costs its own section and
 nothing else. The credentials the quota reads are the ones the CLI already wrote on this machine;

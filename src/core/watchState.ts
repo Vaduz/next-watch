@@ -17,18 +17,26 @@ import { type AutoUpdateMemo } from './toolVersionView.js';
 import { type QuotaSessionProbe } from './quota/view.js';
 import { type FiredTimes } from './quota/schedule.js';
 
-/** The scheduled quota session's progress.
+/** What the watcher knows about **one CLI's** five-hour window: what it has already done about
+ *  it, and what the last read saw.
  *
  *  `fired` is null until the schedule is **armed**, which happens on the first look at the clock
  *  rather than here: what counts as already past depends on the times, and this file is where
  *  the state begins, not where the config is read. */
-export interface QuotaScheduleState {
+export interface QuotaSessionState {
+  /** The last window a message was sent to, keyed so the same one is never opened twice. Null
+   *  means it has never happened. */
+  probe: QuotaSessionProbe | null;
+  /** Listed time (minutes since midnight) to the day it last fired on. */
   fired: FiredTimes | null;
   /** When a session was last started, for the `sent HH:MM` tail on the service line. */
   sentAtMs: number | null;
   /** The five-hour window as the last read saw it, so the line can be drawn without the
    *  `quota` section being switched on. */
   window: { open: boolean; closesAtMs: number | null } | null;
+  /** Whether the CLI can be run here at all. Null before the first look; false is said once and
+   *  then nothing more is attempted for it. */
+  installed: boolean | null;
 }
 
 /** The current HEAD and how many commits are still to come. **It is re-read right after a
@@ -55,12 +63,9 @@ export interface WatchState {
   /** The upstream version an update was already run for, one per CLI, so the same version is
    *  never acted on twice. */
   autoUpdated: AutoUpdateMemo;
-  /** The last time a usage window was opened, keyed so the same window is never opened twice.
-   *  Null means it has never happened. */
-  quotaSession: QuotaSessionProbe | null;
-  /** What the schedule has done so far and what the last quota read saw, for deciding the next
-   *  firing and for the line under the service row. */
-  quotaSchedule: QuotaScheduleState;
+  /** What has been done about each CLI's five-hour window, keyed by the CLI. A CLI appears
+   *  here from the first look at it, so a key that is absent means it has not been looked at. */
+  quotaSessions: Record<string, QuotaSessionState | undefined>;
   /** The ssh-agent from the previous tick. Null means it has never been read. */
   ssh: SshAgentCard | null;
   /** True while the terminal belongs to a person (a passphrase prompt). **Nothing redraws.** */
@@ -86,8 +91,7 @@ export function initialState(head: string, nowMs: number): WatchState {
     local: { servers: [], tasks: [], sessions: [] },
     versions: null,
     autoUpdated: {},
-    quotaSession: null,
-    quotaSchedule: { fired: null, sentAtMs: null, window: null },
+    quotaSessions: {},
     repo: { head, behind: 0 },
     ssh: null,
     paused: false,

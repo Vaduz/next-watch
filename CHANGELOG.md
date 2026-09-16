@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+- **The quota session covers Codex too, and each CLI can be set separately.** Codex has a
+  five-hour window of its own, and `codex exec "hi"` opens it the way `claude -p "hi"` opens
+  Claude's. `providers.quotaSession` now takes a key per CLI beside the setting for both:
+
+  ```
+  quotaSession: true                                   // both, whenever closed
+  quotaSession: { at: ['06:00', '11:00'] }             // both, on that schedule
+  quotaSession: { claude: { at: ['09:00'] }, codex: false }   // one each
+  ```
+
+  A key names only that CLI: what it does not name keeps whatever the outer setting says. Each
+  CLI is decided on **its own** window, so one can be sent to while the other's window is open.
+  A CLI that is not installed is skipped with one line in the log rather than a failed spawn a
+  second.
+
+- **Each service row says which mode is on for its CLI.** Under the Claude row and the OpenAI row:
+  `session: auto · next refresh when the window closes (13:12)`,
+  `session: manual · next refresh 14:00`, `session: off`, or `session: off (not installed)`. The
+  setting spends something, so it is worth being able to read it off the screen rather than out of
+  the config file.
+
 - **The quota session can run on a schedule instead of whenever the window is closed.**
   `providers.quotaSession` now takes `{ at: ['06:00', '11:00', '16:00', '21:00'] }`, read in the
   watch's own clock (`timezoneOffsetMinutes`), and `--quota-session-at HH:MM,HH:MM` does the same
@@ -19,11 +40,6 @@
     is how often the remote is checked, and a schedule whose resolution depended on it would have
     fired an hour late for anyone who checks git hourly. It costs nothing: the quota is read
     through the same one-minute cache the panel reads.
-
-- **Each service row says how this machine opens that CLI's window.** Under the Claude row of the
-  service status: `session: auto · next refresh when the window closes (13:12)`,
-  `session: manual · next refresh 14:00`, or `session: off`. The setting spends something, so it
-  is worth being able to read it off the screen rather than out of the config file.
 
 - **Fixed: `--dry-run` sent the quota-opening message.** A dry run is the promise that the run
   changes nothing, and this is the one thing in the watcher that spends something. It now says

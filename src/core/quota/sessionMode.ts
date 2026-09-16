@@ -9,8 +9,9 @@ import { formatScheduleTime, nextScheduleTime, type ScheduledTime } from './sche
 import type { QuotaSessionModeRow } from '../types.js';
 import type { WatchClock } from '../view/index.js';
 
-/** Which CLI each built-in service row stands for. A `services` entry a host wrote itself has
- *  no CLI behind it and gets no session line. */
+/** Which CLI each built-in service row stands for: a person looks at the Claude row for Claude
+ *  and at the OpenAI row for Codex. A `services` entry a host wrote itself has no CLI behind it
+ *  and gets no session line. */
 const SERVICE_CLI: Readonly<Record<string, string | undefined>> = { Claude: 'claude', OpenAI: 'codex' };
 
 /** The session row belonging to a service row, or null when that service has none. */
@@ -50,7 +51,8 @@ function manualDetail(row: QuotaSessionModeRow, nowMs: number, clock: WatchClock
 export function quotaSessionLine(row: QuotaSessionModeRow, nowMs: number, clock: WatchClock): string {
   const detail =
     row.mode === 'auto' ? autoDetail(row, clock) : row.mode === 'manual' ? manualDetail(row, nowMs, clock) : [];
-  return [`session: ${row.mode}`, ...detail].join(' · ');
+  const why = row.note === null || row.note === undefined ? '' : ` (${row.note})`;
+  return [`session: ${row.mode}${why}`, ...detail].join(' · ');
 }
 
 /** Fold what the watcher knows into the row the screen draws. Pure, so the wording and the
@@ -60,17 +62,22 @@ export function quotaSessionModeRow(o: {
   /** The listed times, null for the automatic mode, and the whole thing off when `on` is false. */
   at: readonly ScheduledTime[] | null;
   on: boolean;
+  /** Whether the CLI can be run here. A switch that is on for a CLI that is not installed is
+   *  off in practice, and the line says which of the two it is. */
+  installed?: boolean;
   window: { open: boolean; closesAtMs: number | null } | null;
   sentAtMs: number | null;
   nowMs: number;
   offsetMinutes: number;
 }): QuotaSessionModeRow {
-  const mode = !o.on ? 'off' : o.at === null ? 'auto' : 'manual';
+  const missing = o.installed === false;
+  const mode = !o.on || missing ? 'off' : o.at === null ? 'auto' : 'manual';
   return {
     cli: o.cli,
     mode,
+    note: missing ? 'not installed' : null,
     window: mode === 'off' ? null : o.window,
-    nextAtMinutes: o.at === null || !o.on ? null : nextScheduleTime(o.at, o.nowMs, o.offsetMinutes),
+    nextAtMinutes: mode === 'manual' && o.at !== null ? nextScheduleTime(o.at, o.nowMs, o.offsetMinutes) : null,
     sentAtMs: mode === 'off' ? null : o.sentAtMs,
   };
 }

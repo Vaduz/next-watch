@@ -55,11 +55,19 @@ describe('buildProviders', () => {
   });
 
   it('reads the schedule into minutes, and leaves the automatic mode as null', () => {
-    expect(build({ quotaSession: true }).quotaSession?.at).toBeNull();
+    expect(build({ quotaSession: true }).quotaSession?.plans).toEqual([
+      { cli: 'claude', at: null },
+      { cli: 'codex', at: null },
+    ]);
     // Sorted, whatever order they were written in, so "the next one" is arithmetic.
-    expect(build({ quotaSession: { at: ['14:00', '06:00'] } }).quotaSession?.at).toEqual([360, 840]);
+    expect(build({ quotaSession: { at: ['14:00', '06:00'] } }).quotaSession?.plans[0].at).toEqual([360, 840]);
     // A schedule with no `cwd` still gets the sandbox, rather than running where the watch does.
     expect(build({ quotaSession: { at: ['09:00'] } }).quotaSession?.cwd).toBe(join(tmpdir(), 'site'));
+  });
+
+  it('is off altogether only when it is off for every CLI', () => {
+    expect(build({ quotaSession: { claude: false, codex: false } }).quotaSession).toBeNull();
+    expect(build({ quotaSession: { claude: false } }).quotaSession?.plans).toEqual([{ cli: 'codex', at: null }]);
   });
 
   it('refuses a time it cannot read, naming where it came from', () => {

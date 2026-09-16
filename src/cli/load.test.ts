@@ -103,6 +103,7 @@ describe('loadConfig, the quota-session schedule', () => {
     ['the automatic mode', `{ quotaSession: true }`],
     ['a schedule', `{ quotaSession: { at: ['09:00', '14:00'] } }`],
     ['a schedule and a sandbox together', `{ quotaSession: { cwd: '/tmp/box', at: ['09:00'] } }`],
+    ['a setting per CLI', `{ quotaSession: { claude: { at: ['09:00'] }, codex: false } }`],
   ];
   for (const [name, providers] of accepted) {
     it(`accepts ${name}`, async () => {
@@ -115,7 +116,18 @@ describe('loadConfig, the quota-session schedule', () => {
     ['an hour that does not exist', `{ quotaSession: { at: ['24:00'] } }`, /is not a time/],
     ['a duplicate', `{ quotaSession: { at: ['09:00', '09:00'] } }`, /listed twice/],
     ['an empty list, which says nothing at all', `{ quotaSession: { at: [] } }`, /at least one time/],
-    ['a string where a list belongs', `{ quotaSession: { at: '09:00' } }`, /must be an array of times/],
+    ['a string where a list belongs', `{ quotaSession: { at: '09:00' } }`, /must be a list of times/],
+    // ⚠️ Each CLI's own list is checked too. Left to `buildProviders`, the message would name
+    // the key and not the file, which is the wrong answer to a typing mistake.
+    ['a bad time under claude', `{ quotaSession: { claude: { at: ['9:00'] } } }`, /quotaSession\.claude\.at/],
+    ['a bad time under codex', `{ quotaSession: { codex: { at: ['24:00'] } } }`, /quotaSession\.codex\.at/],
+    ['a string under codex', `{ quotaSession: { codex: { at: '09:00' } } }`, /must be a list of times/],
+    ['an empty list under claude', `{ quotaSession: { claude: { at: [] } } }`, /at least one time/],
+    [
+      'something that is neither a switch nor an object',
+      `{ quotaSession: 'yes' }`,
+      /must be true, false, or an object/,
+    ],
   ];
   for (const [name, providers, message] of refused) {
     it(`refuses ${name}`, async () => {

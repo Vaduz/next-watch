@@ -127,6 +127,20 @@ describe('quotaSessionModeRow', () => {
   it('is off when the switch is, and then carries nothing else', () => {
     const built = build({ at: [840], on: false, window: { open: true, closesAtMs: NOW }, sentAtMs: NOW });
 
-    expect(built).toEqual({ cli: 'claude', mode: 'off', window: null, nextAtMinutes: null, sentAtMs: null });
+    expect(built).toEqual({
+      cli: 'claude',
+      mode: 'off',
+      note: null,
+      window: null,
+      nextAtMinutes: null,
+      sentAtMs: null,
+    });
+  });
+
+  it('is off when the CLI is not installed, and the line says which of the two it is', () => {
+    const built = build({ at: [840], installed: false });
+
+    expect(built.mode).toBe('off');
+    expect(quotaSessionLine(built, NOW, CLOCK)).toBe('session: off (not installed)');
   });
 });

@@ -72,6 +72,8 @@ export interface QuotaSessionModeRow {
   /** `auto` opens the window whenever it is found closed; `manual` only at the listed times;
    *  `off` means the watcher sends nothing for this CLI. */
   mode: 'auto' | 'manual' | 'off';
+  /** Why it is off, where the switch alone does not say it (`not installed`). Null otherwise. */
+  note?: string | null;
   /** The five-hour window as the last read saw it. Null before the first read. */
   window: { open: boolean; closesAtMs: number | null } | null;
   /** The next listed time, in minutes since midnight. Null outside the scheduled mode. */
