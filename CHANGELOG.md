@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0
 
 - **A Codex session's row shows its model.** It has always shown `-`, and the reason was one
   line: both readers of a rollout skipped every record that was not an `event_msg`, and the model
@@ -69,10 +69,11 @@
   where GitHub starts scrolling a code block sideways. The content is the same; the comments are
   broken across lines instead of running past the edge.
 
-- docs: the dashboard capture in the README was retaken at **80 columns** and now shows the two
-  sections it was missing — the live Claude and Codex sessions, and the service-status rows. The
-  old one was 108 columns wide, which GitHub renders with a horizontal scrollbar, and it had
-  `providers` empty, so the section people come for was not in the picture at all.
+- docs: the dashboard capture in the README was retaken at **80 columns**, and shows the sections
+  it was missing — the live Claude and Codex sessions, the service-status rows, and the line under
+  each of those saying how this machine opens that CLI's window. The old one was 108 columns wide,
+  which GitHub renders with a horizontal scrollbar, and it had `providers` empty, so the sections
+  people come for were not in the picture at all.
 
 ## 0.3.0
 
