@@ -44,9 +44,18 @@ function tidyName(text: string): string {
   return chars.length > MAX_NAME_CHARS ? `${chars.slice(0, MAX_NAME_CHARS).join('')}…` : one;
 }
 
-/** The current model, which the settings line carries; the metadata line has none. */
-function modelOf(payload: Record<string, unknown>): string | null {
-  return str(asRecord(payload.thread_settings)?.model);
+/** The model one record names, or null when it names none.
+ *
+ *  ⚠️ **Two shapes, and one of them is not an `event_msg`.** Codex 0.154.0 writes a top-level
+ *  `turn_context` record at the start of every turn, with the model on it; older versions wrote
+ *  an `event_msg` / `thread_settings_applied` carrying `thread_settings.model`. Reading only the
+ *  second is how every Codex row came to show `-` for its model: the `turn_context` line was
+ *  filtered out before anything looked at it. Both are read, so a rollout from either version
+ *  answers. */
+function modelIn(record: { type: string; payload: Record<string, unknown> }): string | null {
+  if (record.type === 'turn_context') return str(record.payload.model);
+  if (record.type !== 'event_msg' || str(record.payload.type) !== 'thread_settings_applied') return null;
+  return str(asRecord(record.payload.thread_settings)?.model);
 }
 
 /** What the head of a rollout yields, or null when it has not appeared yet. */
@@ -64,18 +73,17 @@ export interface CodexHeadFacts {
  *
  *  The model appears **only at the start of a turn**. During a long turn it is pushed out of
  *  the tail's reading window, so the first one found at the head is kept as a fallback; a
- *  newer one read from the tail wins. */
+ *  newer one read from the tail wins, which is what makes a `/model` part-way through show. */
 export function codexHeadFacts(head: string): CodexHeadFacts {
   const facts: CodexHeadFacts = { name: null, model: null };
   for (const line of head.split('\n')) {
     const record = parseRolloutLine(line);
-    if (record?.type !== 'event_msg') continue;
+    if (record === null) continue;
+    facts.model ??= modelIn(record);
+    if (record.type !== 'event_msg') continue;
     if (facts.name === null) {
       const prompt = promptOf(record.payload);
       if (prompt !== null) facts.name = tidyName(prompt);
-    }
-    if (facts.model === null && str(record.payload.type) === 'thread_settings_applied') {
-      facts.model = modelOf(record.payload);
     }
     if (facts.name !== null && facts.model !== null) break;
   }
@@ -119,7 +127,9 @@ export function codexTranscriptTip(tail: string): CodexTip {
   const lines = tail.split('\n');
   for (let i = lines.length - 1; i >= 0; i--) {
     const record = parseRolloutLine(lines[i]);
-    if (record?.type !== 'event_msg') continue;
+    if (record === null) continue;
+    tip.model ??= modelIn(record);
+    if (record.type !== 'event_msg') continue;
     const type = str(record.payload.type) ?? '';
     const status = TURN_STATUS[type];
     if (status !== undefined && tip.status === '?') {
@@ -127,7 +137,6 @@ export function codexTranscriptTip(tail: string): CodexTip {
       tip.statusAtMs = record.atMs;
     }
     if (type === 'token_count' && tip.contextTokens === null) tip.contextTokens = contextTokensOf(record.payload);
-    if (type === 'thread_settings_applied' && tip.model === null) tip.model = modelOf(record.payload);
     if (tip.status !== '?' && tip.model !== null && tip.contextTokens !== null) break;
   }
   return tip;

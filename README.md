@@ -61,39 +61,39 @@ directory's name), `root` is the working directory, `branch` is `main`, the remo
 
 One screen, redrawn in place. This is a real one, watching a throwaway project with one described
 server and three of the optional sections turned on — the agent sessions, the service status, and
-the quota session, on a schedule for Claude and off for Codex:
+the quota session, on a schedule for Claude and automatic for Codex:
 
 ```
-╭─ next-watch 0.3.0  12:15:41  up 16s ───────────────────────────────────────╮
+╭─ next-watch 0.3.0  12:39:35  up 17s ───────────────────────────────────────╮
 │ REPO     /tmp/nw-shot/site  main 2bc45b3  in sync with origin/main         │
-│          nothing pulled during this watch · next git check 3585s           │
+│          nothing pulled during this watch · next git check 3582s           │
 │                                                                            │
 │    SERVER  STATE  URL                    OWNER       MODE  UPTIME          │
-│    web     up     http://localhost:3400  pid 616201  bun      15s          │
+│    web     up     http://localhost:3400  pid 764986  bun      18s          │
 │                                                                            │
-│ SESSION  TREE        AGENT   STATUS  MODEL      CONTEXT  IDLE   VER        │
-│   What does the dev script in package.json…                                │
-│          site        codex   idle    -              15k     5s  0.154.0    │
+│ SESSION  TREE        AGENT   STATUS  MODEL        CONTEXT  IDLE    VER     │
 │   site-da                                                                  │
-│          site        claude  idle    opus-5         31k    17s  2.1.273    │
+│          site        claude  busy    opus-5           31k     24s  2.1.273 │
+│   What does the dev script in package.json…                                │
+│          site        codex   idle    gpt-6-astra      15k      9s  0.154.0 │
 │                                                                            │
 │    SERVICE  Claude  ●  All Systems Operational                             │
 │             session: manual · next refresh 16:00                           │
 │             OpenAI  ●  All Systems Operational                             │
-│             session: off                                                   │
+│             session: auto · next refresh when the window closes (16:58)    │
 ├─ event log ────────────────────────────────────────────────────────────────┤
-│ 12:15:25 ◎ next-watch started (git every 3600s · keys on)                  │
-│ 12:15:25 ○ web: bun run dev                                                │
-│ 12:15:25 ○ web is listening on http://localhost:3400                       │
-│ 12:15:25 ◆ server web is up at http://localhost:3400 (bun)                 │
-│ 12:15:26 · quota: claude next scheduled session 16:00                      │
+│ 12:39:17 ◎ next-watch started (git every 3600s · keys on)                  │
+│ 12:39:17 ○ web: bun run dev                                                │
+│ 12:39:17 ○ web is listening on http://localhost:3400                       │
+│ 12:39:17 ◆ server web is up at http://localhost:3400 (bun)                 │
+│ 12:39:18 · quota: claude next scheduled session 16:00                      │
 ├─ web access  /tmp/nw-shot/site/log/web.txt ────────────────────────────────┤
 │           $ node server.mjs                                                │
-│ 12:15:29  GET                404  12ms  /missing                           │
-│ 12:15:30  GET                200  11ms  /                                  │
+│ 12:39:20  GET                404  12ms  /missing                           │
+│ 12:39:21  GET                200  11ms  /                                  │
 ╰────────────────────────────────────────────────────────────────────────────╯
 
-  ⠼ Tab select · up/down scroll · (h)elp · (q)uit
+  ⠋ Tab select · up/down scroll · (h)elp · (q)uit
 ```
 
 What the sections are. The first five are the repository itself and are always drawn:

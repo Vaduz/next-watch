@@ -22,6 +22,16 @@ const META = JSON.stringify({
 const line = (type: string, payload: object, timestamp = '2026-08-21T18:32:00.000Z'): string =>
   JSON.stringify({ timestamp, type, payload });
 
+/** A real `turn_context`, cut to the fields that are read. Codex writes one at the start of
+ *  every turn; the rest of it is the sandbox and approval policy. */
+const TURN_CONTEXT = line('turn_context', {
+  turn_id: '01a0a836-35af-7260-bfa7-72e6ee640161',
+  cwd: '/home/user/site',
+  model: 'gpt-6-astra',
+  effort: 'medium',
+  approval_policy: 'on-request',
+});
+
 describe('codexHeadFacts', () => {
   const userMessage = (text: string): string =>
     line('event_msg', { type: 'item_completed', item: { type: 'UserMessage', content: [{ type: 'text', text }] } });
@@ -62,6 +72,15 @@ describe('codexHeadFacts', () => {
       model: 'gpt-5.6-sol',
     });
   });
+
+  // ⚠️ The record 0.154.0 actually writes, and the reason every Codex row showed `-`: it is a
+  // top-level `turn_context`, not an `event_msg`, so the loop dropped it before reading it.
+  it('reads the model off a turn_context, which is what a current rollout carries', () => {
+    expect(codexHeadFacts([META, TURN_CONTEXT, userMessage('fix it')].join('\n'))).toEqual({
+      name: 'fix it',
+      model: 'gpt-6-astra',
+    });
+  });
 });
 
 describe('codexTranscriptTip', () => {
@@ -95,5 +114,23 @@ describe('codexTranscriptTip', () => {
     const tip = codexTranscriptTip(line('response_item', { type: 'reasoning' }));
     expect(tip.status).toBe('?');
     expect(tip.statusAtMs).toBeNull();
+  });
+
+  it('reads the model off a turn_context, which is what a current rollout carries', () => {
+    expect(codexTranscriptTip([TURN_CONTEXT, line('event_msg', { type: 'task_complete' })].join('\n')).model).toBe(
+      'gpt-6-astra',
+    );
+  });
+
+  // Read backwards, so a `/model` part-way through a session is what the row shows.
+  it('takes the newest of several, not the first', () => {
+    const older = line('turn_context', { model: 'gpt-5.6-sol' });
+    const tail = [older, line('event_msg', { type: 'task_started' }), TURN_CONTEXT].join('\n');
+
+    expect(codexTranscriptTip(tail).model).toBe('gpt-6-astra');
+  });
+
+  it('has no model when nothing in the tail names one', () => {
+    expect(codexTranscriptTip(line('event_msg', { type: 'task_complete' })).model).toBeNull();
   });
 });

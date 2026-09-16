@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- **A Codex session's row shows its model.** It has always shown `-`, and the reason was one
+  line: both readers of a rollout skipped every record that was not an `event_msg`, and the model
+  is on a top-level `turn_context` record, written at the start of each turn. Both shapes are now
+  read — `turn_context.model` as codex 0.154.0 writes it, and the older
+  `thread_settings_applied` — and the tail wins over the head, so a model changed with `/model`
+  part-way through a session is what the row shows.
+
+  A session that has not taken a turn yet has no such record, so two fallbacks follow it: the
+  `-m` / `--model` on the process's own command line, and then the configuration
+  (`$CODEX_HOME/<profile>.config.toml` when `-p` named a profile, otherwise `config.toml`). Only
+  the keys **before the first table header** are read from it — a `model` under `[tui]` or
+  `[projects."…"]` is somebody else's — which also means no TOML dependency for one line. Nothing
+  readable still leaves the column as `-`.
+
 - **The quota session covers Codex too, and each CLI can be set separately.** Codex has a
   five-hour window of its own, and `codex exec "hi"` opens it the way `claude -p "hi"` opens
   Claude's. `providers.quotaSession` now takes a key per CLI beside the setting for both:

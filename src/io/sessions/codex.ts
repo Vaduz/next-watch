@@ -14,8 +14,10 @@
  *  subagents). Deciding which one has a person at it is `core/sessions/codex/rollout.ts`.
  *
  *  ⚠️ **This is called every second.** What cannot change (the first line, the first prompt) is
- *  remembered per path; the tail is re-read only when the file has grown. */
+ *  remembered per path; the tail is re-read only when the file has grown, and the configuration
+ *  only when it has been rewritten. */
 import path from 'node:path';
+import os from 'node:os';
 import fs from 'node:fs';
 import type { ProcInfo } from '../processes.js';
 import { readHead, readTail, fileMtimeMs, fileSize } from '../fileWindow.js';
@@ -31,6 +33,8 @@ import {
   type CodexTip,
 } from '../../core/sessions/codex/tip.js';
 import { toCodexSessionRow } from '../../core/sessions/codex/row.js';
+import { codexInvocation } from '../../core/sessions/codex/invocation.js';
+import { codexConfigModel } from '../../core/sessions/codex/config.js';
 import { restartablePane, type TmuxPane } from '../../core/tmuxPanes.js';
 import type { AgentSessionRow } from '../../core/types.js';
 
@@ -153,6 +157,48 @@ function interactiveRollout(pid: number): { file: string; meta: CodexSessionMeta
   return found.reduce((a, b) => ((fileMtimeMs(b.file) ?? 0) > (fileMtimeMs(a.file) ?? 0) ? b : a));
 }
 
+/** Where Codex keeps its configuration. `CODEX_HOME` is the CLI's own override, so a machine
+ *  that moved it is followed rather than guessed at. */
+const codexHome = (): string => process.env.CODEX_HOME ?? path.join(os.homedir(), '.codex');
+
+/** The config files are re-read only when they change, because this runs every second. The key
+ *  is the path and the file's modification time; an unreadable file is remembered as null so a
+ *  machine with no config does not stat twice a second for the life of the watch. */
+const configCache = new Map<string, { mtimeMs: number | null; model: string | null }>();
+
+function configModel(file: string): string | null {
+  const mtimeMs = fileMtimeMs(file);
+  const cached = configCache.get(file);
+  if (cached?.mtimeMs === mtimeMs) return cached.model;
+  let model: string | null = null;
+  try {
+    model = codexConfigModel(fs.readFileSync(file, 'utf8'));
+  } catch {
+    /* no config file, or one that cannot be read: there is simply no fallback */
+  }
+  configCache.set(file, { mtimeMs, model });
+  return model;
+}
+
+/** The model to show when the rollout named none.
+ *
+ *  ⚠️ **The order is strongest evidence first.** The rollout says what the session is *on*,
+ *  including a model changed with `/model` part-way through, so anything here is only reached by
+ *  a session that has not taken a turn yet. Then what it was *asked* for on its command line,
+ *  then what the configuration would have given it: `$CODEX_HOME/<profile>.config.toml` when the
+ *  command line named a profile (0.154.0 layers a whole file, not a table), and the base
+ *  `config.toml` otherwise. Nothing readable leaves the column as `-`.
+ *
+ *  The `codex app-server` session listing is deliberately **not** used: it is a process round
+ *  trip per second, and the rollout the process already has open carries the same answer. */
+function fallbackModel(command: string): string | null {
+  const { model, profile } = codexInvocation(command);
+  if (model !== null) return model;
+  const home = codexHome();
+  const layered = profile === null ? null : configModel(path.join(home, `${profile}.config.toml`));
+  return layered ?? configModel(path.join(home, 'config.toml'));
+}
+
 /** The live interactive Codex sessions as rows. `procs`, `own` and `panes` are the **same ps
  *  and tmux results** the other reader was given. */
 export function liveCodexSessions(
@@ -169,11 +215,17 @@ export function liveCodexSessions(
     const head = cachedHead(found.file);
     const tip = cachedTip(found.file);
     rows.push(
-      toCodexSessionRow(found.meta, proc.pid, { ...tip, model: tip.model ?? head.model }, nowMs, {
-        name: head.name,
-        self: own.has(proc.pid),
-        pane: restartablePane(panes, procs, proc.pid)?.pane.id ?? null,
-      }),
+      toCodexSessionRow(
+        found.meta,
+        proc.pid,
+        { ...tip, model: tip.model ?? head.model ?? fallbackModel(proc.command) },
+        nowMs,
+        {
+          name: head.name,
+          self: own.has(proc.pid),
+          pane: restartablePane(panes, procs, proc.pid)?.pane.id ?? null,
+        },
+      ),
     );
   }
   return rows;
