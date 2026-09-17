@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- docs: the dashboard block in the README is retaken at 100 columns against the current release,
+  and its event log shows the four things the watch does on its own or on a keypress: a pull with
+  the restart it caused, a blocked path refusing one, a server restart with its build, an agent
+  session restarted back into its tmux pane, a CLI update, and the message that opens a closed
+  quota window. The README no longer claims the block is a single screen — it is real output,
+  combined.
+
 - **A session that is not running inside a tmux pane says so on its row.** `(r)estart` is the one
   verb that needs tmux — it is SIGTERM followed by typing the resume command back into the
   session's own pane — and a row that quietly lacked the verb read as a fault in the watcher
