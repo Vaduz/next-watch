@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+- **A live `claude` the CLI kept no session record for is listed too.** A session started by
+  another Claude Code session inherits `CLAUDE_CODE_CHILD_SESSION`, and the CLI then writes no
+  `~/.claude/sessions/<pid>.json` — so a real session, answering prompts and spending the same
+  quota as any other, was absent from a section that promises every live session on the machine.
+  On a machine where agents start agents that is exactly the wrong thing to under-report.
+
+  The row is built from `ps` alone, and says so. The model, the context, the idle time and the
+  version are left **empty rather than dashed**: a dash reads as "there is none", where the truth
+  is that the record holding them was never written. The status reads `no record`, and the note
+  under the row gives how long the process has been running — `IDLE` means "since the state last
+  changed", and this row has no state to have changed, so it does not go there and no column was
+  added for it.
+
+  It is never offered `(r)estart`, **in a tmux pane or out of one**, because there is no session
+  id to resume — and for that reason the note replaces the `not in tmux` one rather than joining
+  it, which would have named the wrong reason. `(s)top` works as it does anywhere.
+
+  What the watcher runs itself is not counted: `claude -p "hi"` opens a quota window and
+  `claude update` installs a release, and neither is somebody's session. The cwd comes from
+  `/proc`, so these rows are **Linux only**, the same limit the Codex half already has.
+
 ## 0.6.0
 
 - docs: the dashboard block in the README is retaken at 100 columns against the current release,

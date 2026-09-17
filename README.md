@@ -140,6 +140,8 @@ Every capability below is one line; the rules behind them are in [Reference](#re
   or stops anything in a `tasks` list the config file supplies.
 - **Restart is the one verb that needs tmux.** A session started outside a pane is listed and can
   be stopped, and its row says `not in tmux · (r)estart needs tmux`.
+- A live `claude` the CLI wrote no session record for is listed too, with its unknown columns left
+  empty and a note saying so. **Linux only** — the cwd comes from `/proc`.
 
 **Quota windows**
 
@@ -532,6 +534,14 @@ both and tells them apart. Run next-watch in a window of its own beside them.
 
 <details>
 <summary>How a session is matched to its pane</summary>
+
+A session started **by another Claude Code session** inherits `CLAUDE_CODE_CHILD_SESSION`, and
+the CLI then writes no `~/.claude/sessions/<pid>.json` for it. Such a session is still listed —
+it is live and spending the same quota as any other — but the row is built from `ps` alone, so
+the model, the context, the idle time and the version are left **empty rather than dashed**: the
+record that holds them was never written. Its status reads `no record`, and the note under it
+gives how long the process has been running. It is never offered `(r)estart`, in a tmux pane or
+out of one, because there is no session id to resume.
 
 `tmux list-panes -a` gives each pane's id, its root process and what it is running now. The agent
 is not that root process — the pane runs a shell and the agent is a descendant of it — so the

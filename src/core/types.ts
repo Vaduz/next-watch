@@ -121,6 +121,13 @@ export interface AgentSessionRow {
   self?: boolean;
   /** The tmux pane it runs in (`%3`), or null when it is not under tmux. */
   pane?: string | null;
+  /** True when the CLI wrote **no session record** for this process, so the row was built from
+   *  `ps` alone. The cells the record would have filled are left empty rather than dashed: a
+   *  dash reads as "there is none", and this is "not knowable from here". */
+  unrecorded?: boolean;
+  /** How long the process has been running, for the note under such a row. There is no column
+   *  for it — `IDLE` means something else — and inventing one would change every other row. */
+  startedSecondsAgo?: number | null;
   /** The line to type into the pane to bring it back (`claude --resume <id>`).
    *  Null when the CLI cannot resume or its transcript cannot be read. */
   resume?: string | null;

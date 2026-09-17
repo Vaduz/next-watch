@@ -18,7 +18,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { isSignalable, procStartTicks, type ProcInfo } from '../processes.js';
+import { isSignalable, procStartTicks, uptimeByPid, type ProcInfo } from '../processes.js';
 import { readTail } from '../fileWindow.js';
 import {
   claudeResumeCommand,
@@ -28,6 +28,7 @@ import {
   toSessionRow,
   type AgentSessionRecord,
 } from '../../core/sessions/claude.js';
+import { isInteractiveClaudeCommand, unrecordedSessionRow } from '../../core/sessions/unrecorded.js';
 import { restartablePane, type TmuxPane } from '../../core/tmuxPanes.js';
 import type { AgentSessionRow } from '../../core/types.js';
 import { asRecord } from '../../core/util.js';
@@ -185,7 +186,7 @@ export function liveClaudeSessions(
 ): AgentSessionRow[] {
   const records = readSessionRecords().filter(isInteractiveSession);
   const alive = livePids(records, procs, psFailed);
-  return records
+  const rows = records
     .filter(r => alive.has(r.pid))
     .map(r =>
       toSessionRow(r, nowMs, {
@@ -194,4 +195,41 @@ export function liveClaudeSessions(
         ...restartWay(r, procs, panes),
       }),
     );
+  return [...rows, ...unrecordedClaudeSessions(procs, own, new Set(rows.map(r => r.pid)))];
+}
+
+/** Where a process is running, from `/proc`. **Linux only**, and null everywhere else — which is
+ *  the same limit the Codex half already has. */
+function cwdOf(pid: number): string | null {
+  try {
+    return fs.readlinkSync(`/proc/${pid}/cwd`);
+  } catch {
+    return null;
+  }
+}
+
+/** The live `claude` processes the CLI wrote **no session record** for.
+ *
+ *  ⚠️ These are real sessions spending real quota, and before this they were absent from a
+ *  section that promises every live session on the machine. See `core/sessions/unrecorded.ts`
+ *  for why they have no record and why their cells are empty rather than dashed.
+ *
+ *  Anything the watcher started itself is left out: `claude -p "hi"` opens a quota window and
+ *  `claude update` installs a release, and neither is somebody's session. */
+export function unrecordedClaudeSessions(
+  procs: readonly ProcInfo[],
+  own: ReadonlySet<number>,
+  recorded: ReadonlySet<number>,
+): AgentSessionRow[] {
+  const found = procs.filter(p => !recorded.has(p.pid) && isInteractiveClaudeCommand(p.command));
+  if (!found.length) return [];
+  const uptimes = uptimeByPid(found.map(p => p.pid));
+  return found.map(p =>
+    unrecordedSessionRow({
+      pid: p.pid,
+      cwd: cwdOf(p.pid),
+      startedSecondsAgo: uptimes.get(p.pid) ?? null,
+      self: own.has(p.pid),
+    }),
+  );
 }

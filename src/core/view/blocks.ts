@@ -194,7 +194,14 @@ export function formatTokens(n: number | null): string {
 function sessionVersionCell(s: AgentSessionRow, versions: readonly ToolVersionRow[], row: RowTone): Cell {
   const installed = versions.find(v => v.name === s.agent)?.version ?? null;
   const stale = s.version !== null && installed !== null && s.version !== installed;
-  return { text: s.version ?? '-', tone: stale ? 'warn' : (row ?? 'dim') };
+  return { text: s.version ?? blank(s, '-'), tone: stale ? 'warn' : (row ?? 'dim') };
+}
+
+/** What an unreadable cell says. **Empty for a row built from `ps` alone**: a dash there would
+ *  read as "there is none", where the truth is that the record which holds it was never written.
+ *  Every other row keeps the dash it has always had. */
+function blank(s: AgentSessionRow, dash: string): string {
+  return s.unrecorded === true ? '' : dash;
 }
 
 /** The title row of one session. **Not truncated**: it wraps if it overflows. The cursor sits
@@ -215,7 +222,7 @@ const SESSION_NOTE_INDENT = ' '.repeat(1 + 1 + displayWidth('SESSION') + 2);
  *  it, so putting "not in tmux · (r)estart needs tmux" in `STATUS` would widen that column on
  *  every row, for every session, to say something about one of them. */
 function sessionRows(s: AgentSessionRow, title: string, meta: string, paint: Paint): string[] {
-  const note = sessionRestartNote(s);
+  const note = sessionRestartNote(s, s.startedSecondsAgo == null ? null : formatUptime(s.startedSecondsAgo));
   if (note === null) return [title, meta];
   return [title, meta, SESSION_NOTE_INDENT + paint(note, 'dim')];
 }
@@ -244,9 +251,9 @@ export function sessionBlock(p: WatchPanel, paint: Paint, view: WatchView): stri
       { text: truncateDisplay(s.tree, 16), tone: row ?? 'dim' },
       { text: s.agent, tone: row ?? 'dim' },
       { text: s.status, tone: row ?? SESSION_TONE[s.status] ?? 'dim' },
-      { text: s.model ?? '-', tone: row ?? 'dim' },
-      { text: formatTokens(s.contextTokens), tone: row, right: true },
-      { text: formatUptime(s.idleSeconds), tone: row ?? 'dim', right: true },
+      { text: s.model ?? blank(s, '-'), tone: row ?? 'dim' },
+      { text: blank(s, formatTokens(s.contextTokens)), tone: row, right: true },
+      { text: blank(s, formatUptime(s.idleSeconds)), tone: row ?? 'dim', right: true },
       sessionVersionCell(s, p.versions, row),
     ];
   });
