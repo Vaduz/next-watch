@@ -7,7 +7,7 @@
  *
  *  Colour marks exceptions only. **A settled state gets no colour**, so every section is built
  *  so that a row colour (`RowTone`) appears only when something is wrong. */
-import { formatUptime, truncateDisplay } from '../term/index.js';
+import { displayWidth, formatUptime, truncateDisplay } from '../term/index.js';
 import { bar, cell, renderCells, type Cell, type Paint, type RowTone, type Tone } from '../term/index.js';
 import { quotaTone } from '../quota/view.js';
 import { formatClockElapsed } from '../util.js';
@@ -21,6 +21,7 @@ import type {
   WatchServerRow,
 } from '../types.js';
 import { since, type WatchClock, type WatchLayout, type WatchView } from './index.js';
+import { sessionRestartNote } from './sessionNote.js';
 
 /** The selection cursor, placed **only at the left edge of the selected row**. The row itself
  *  is not recoloured, because colour is reserved for trouble (down, busy, nearly full). */
@@ -203,6 +204,22 @@ function sessionName(s: AgentSessionRow, view: WatchView, paint: Paint, row: Row
   return `${cursor} ${paint(`${s.self === true ? '*' : ''}${s.name}`, row)}`;
 }
 
+/** How far a note under a session row starts: past the cursor column, the heading column, and
+ *  the two spaces `renderCells` joins columns with. Derived rather than counted, so renaming the
+ *  heading cannot leave the line hanging under the wrong column. */
+const SESSION_NOTE_INDENT = ' '.repeat(1 + 1 + displayWidth('SESSION') + 2);
+
+/** The rows one session takes: its title, its metadata, and a note where it has one.
+ *
+ *  ⚠️ The note goes **outside the table**. `renderCells` pads every column to the widest cell in
+ *  it, so putting "not in tmux · (r)estart needs tmux" in `STATUS` would widen that column on
+ *  every row, for every session, to say something about one of them. */
+function sessionRows(s: AgentSessionRow, title: string, meta: string, paint: Paint): string[] {
+  const note = sessionRestartNote(s);
+  if (note === null) return [title, meta];
+  return [title, meta, SESSION_NOTE_INDENT + paint(note, 'dim')];
+}
+
 /** The agent sessions. **The title goes whole on the first row and the metadata on the
  *  second**, because a title has no bounded length and as a column one long name would push
  *  every other column right. */
@@ -234,5 +251,8 @@ export function sessionBlock(p: WatchPanel, paint: Paint, view: WatchView): stri
     ];
   });
   const rendered = renderCells([head, ...meta], paint);
-  return [rendered[0], ...sessions.flatMap((s, i) => [sessionName(s, view, paint, tones[i]), rendered[i + 1]])];
+  return [
+    rendered[0],
+    ...sessions.flatMap((s, i) => sessionRows(s, sessionName(s, view, paint, tones[i]), rendered[i + 1], paint)),
+  ];
 }

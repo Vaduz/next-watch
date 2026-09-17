@@ -105,7 +105,7 @@ export function helpLines(): string[] {
     'server: (r)estart | (s)top | st(a)rt · task: (k)ill | (s)top',
     'session: (r)estart | (s)top · service: (o)pen · tool: (u)pdate',
     'session (r)estart = SIGTERM, then type its resume command back',
-    'into the same tmux pane',
+    'into the same tmux pane; a session not in tmux says so on its row',
     'log pane: (f)ocus to fill the frame, again to go back',
     'ssh: (a)dd  run ssh-add here (only shown while the agent has no key)',
     'anywhere: (h)elp | (q)uit',

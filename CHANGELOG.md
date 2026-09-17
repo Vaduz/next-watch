@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **A session that is not running inside a tmux pane says so on its row.** `(r)estart` is the one
+  verb that needs tmux — it is SIGTERM followed by typing the resume command back into the
+  session's own pane — and a row that quietly lacked the verb read as a fault in the watcher
+  rather than as a fact about the session. The row now carries
+  `not in tmux · (r)estart needs tmux` on a line of its own, decided by **the same pane lookup the
+  verb uses**, so the two cannot say different things. It hangs under the row rather than going in
+  `STATUS`, because that column is padded to its widest cell and one session's note would widen it
+  on every row.
+
+- docs: the README says how to lay a team of agent sessions out with tmuxp, and what only works
+  through tmux (the session restart verb, and nothing else).
+
 - docs: four ways the README rendered badly on GitHub are fixed — the product name is the page
   heading and the tagline a bold line under it (they were the other way round), the 2×2 feature
   table that drew a blank header stripe is gone, the mermaid diagram (whose last node GitHub's

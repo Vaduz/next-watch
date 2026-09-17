@@ -91,6 +91,8 @@ Every capability below is one line; the rules behind them are in [Reference](#re
 - Lists the live Claude and Codex sessions on this machine: tree, model, context, idle, version.
 - Restarts one — SIGTERM, then its resume command typed back into the same tmux pane — and kills
   or stops anything in a `tasks` list the config file supplies.
+- **Restart is the one verb that needs tmux.** A session started outside a pane is listed and can
+  be stopped, and its row says `not in tmux · (r)estart needs tmux`.
 
 **Quota windows**
 
@@ -435,11 +437,65 @@ press the letter in ( ) to run that verb on what the cursor is on
 server: (r)estart | (s)top | st(a)rt · task: (k)ill | (s)top
 session: (r)estart | (s)top · service: (o)pen · tool: (u)pdate
 session (r)estart = SIGTERM, then type its resume command back
-into the same tmux pane
+into the same tmux pane; a session not in tmux says so on its row
 log pane: (f)ocus to fill the frame, again to go back
 ssh: (a)dd  run ssh-add here (only shown while the agent has no key)
 anywhere: (h)elp | (q)uit
 ```
+
+</details>
+
+## Agents in tmux
+
+A session started inside a tmux pane is one next-watch can **restart in place**: it stops the
+session and types the resume command back into that same pane, so it comes back where it was.
+Started from a plain shell it cannot, and its row says so.
+
+[tmuxp](https://github.com/tmux-python/tmuxp) is a convenient way to lay a team out:
+
+```sh
+mise use pipx:tmuxp   # or: uv tool install tmuxp
+tmuxp load .config/tmuxp.yaml
+```
+
+```yaml
+# .config/tmuxp.yaml
+session_name: agents
+windows:
+  - window_name: workers
+    layout: even-horizontal
+    panes:
+      - start_directory: ./site
+        shell_command: claude
+      - start_directory: ./site
+        shell_command: codex
+      - start_directory: ./docs
+        shell_command: claude
+```
+
+Each pane is one agent in one working tree, and mixing the CLIs is ordinary — the panel lists
+both and tells them apart. Run next-watch in a window of its own beside them.
+
+**What only works through tmux**
+
+- **`(r)estart` on a session row.** It is SIGTERM followed by typing the resume command into the
+  session's own pane; with no pane there is nowhere to type. Without tmux the row is still listed,
+  and `(s)top` still works.
+- Nothing else. Every other section and verb is the same with or without tmux.
+
+<details>
+<summary>How a session is matched to its pane</summary>
+
+`tmux list-panes -a` gives each pane's id, its root process and what it is running now. The agent
+is not that root process — the pane runs a shell and the agent is a descendant of it — so the
+session's ancestors are walked and **the innermost pane that matches wins**. A session whose
+ancestors reach no pane is outside tmux, and that is the same condition the restart verb uses, so
+the note on the row and the verb list cannot disagree.
+
+A pane is only offered a restart when it has **returned to its shell**: typing a command into a
+pane that is still running something would put the text into that program instead. A session with
+no readable resume command is not offered one either — stopping it would leave nothing behind but
+a prompt.
 
 </details>
 
