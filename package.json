@@ -1,6 +1,6 @@
 {
   "name": "next-watch",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Mission control for the machine your agents ship to.",
   "license": "Apache-2.0",
   "type": "module",

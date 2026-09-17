@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.0
 
 - docs: the dashboard block in the README is retaken at 100 columns against the current release,
   and its event log shows the four things the watch does on its own or on a keypress: a pull with
