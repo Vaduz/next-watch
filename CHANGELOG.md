@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- docs: four ways the README rendered badly on GitHub are fixed — the product name is the page
+  heading and the tagline a bold line under it (they were the other way round), the 2×2 feature
+  table that drew a blank header stripe is gone, the mermaid diagram (whose last node GitHub's
+  zoom controls covered, and which npm does not render at all) is a one-line ASCII flow, and the
+  traffic table's `How often` column is short enough that every row is one line. Everything
+  between the capture and that table is now one **What it does** section: every capability as a
+  single line, grouped, with the rules behind them moved into the Reference blocks rather than
+  deleted.
+
 - docs: the README is rewritten as a landing page — a centred hero with the tagline, badges, the
   capture, four blocks on what it does for a machine agents ship to, and the trust material and
   `What leaves the machine` table moved up above the configuration reference. Nothing that was
