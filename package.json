@@ -68,7 +68,7 @@
   ],
   "scripts": {
     "build": "bunx tsc -p tsconfig.build.json",
-    "prepublishOnly": "bun run build",
+    "prepublishOnly": "rm -rf dist && bun run build",
     "lint": "bunx eslint . --max-warnings 0",
     "typecheck": "bunx tsc --noEmit -p tsconfig.json",
     "test": "bun test",
