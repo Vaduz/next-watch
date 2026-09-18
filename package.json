@@ -1,6 +1,6 @@
 {
   "name": "next-watch",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Terminal dashboard that watches a Next.js repo: pulls origin, restarts only the dev servers that changed, and keeps Claude Code and Codex sessions alive.",
   "keywords": [
     "claude-code",

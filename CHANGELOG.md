@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.0
 
 - **The npm page links back to the repository, and the package can be found by searching for what
   it does.** `repository`, `homepage` and `bugs` were never set, so npm rendered the README with no
