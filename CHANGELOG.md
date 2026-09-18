@@ -12,7 +12,10 @@
   Code dashboard, a TUI dev server, an agent dev server watcher — and each returned eight other
   people's packages and not this one. The exact name was the only query that found it. The
   description now says what the thing does in the nouns somebody would type, and the tagline keeps
-  the place it was already doing its work in, at the top of the README.
+  the place it was already doing its work in, at the top of the README. This **reverses what 0.6.0
+  chose**, which put the tagline in `description` so that it would be the first line on the npm
+  page: that line is read by whoever already arrived, and the description is also what the search
+  matches against, which is how anybody arrives at all.
 
 - **A live `claude` the CLI kept no session record for is listed too.** A session started by
   another Claude Code session inherits `CLAUDE_CODE_CHILD_SESSION`, and the CLI then writes no
