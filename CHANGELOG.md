@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- **`npm publish` builds first.** There was no `prepublishOnly`, so publishing shipped whatever
+  happened to be sitting in `dist/` at that moment — the tarball's contents depended on when the
+  last `bun run build` had been run rather than on what the source said. 0.7.0 was correct only
+  because a build had just been run by hand. `prepublishOnly` now runs the build, so the artifact
+  is derived from the tree being published rather than from the state of one working directory.
+
+  It is `prepublishOnly` rather than `prepare`: `prepare` also runs on every `npm install`, and
+  the build is not something an installing consumer should be made to do.
+
 ## 0.7.0
 
 - **The npm page links back to the repository, and the package can be found by searching for what
