@@ -1,7 +1,27 @@
 {
   "name": "next-watch",
   "version": "0.6.0",
-  "description": "Mission control for the machine your agents ship to.",
+  "description": "Terminal dashboard that watches a Next.js repo: pulls origin, restarts only the dev servers that changed, and keeps Claude Code and Codex sessions alive.",
+  "keywords": [
+    "claude-code",
+    "codex",
+    "ai-agents",
+    "nextjs",
+    "dev-server",
+    "terminal-dashboard",
+    "tui",
+    "tmux",
+    "git",
+    "watcher",
+    "bun",
+    "mise"
+  ],
+  "homepage": "https://github.com/Vaduz/next-watch#readme",
+  "bugs": "https://github.com/Vaduz/next-watch/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Vaduz/next-watch.git"
+  },
   "license": "Apache-2.0",
   "type": "module",
   "engines": {

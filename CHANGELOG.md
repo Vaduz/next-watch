@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **The npm page links back to the repository, and the package can be found by searching for what
+  it does.** `repository`, `homepage` and `bugs` were never set, so npm rendered the README with no
+  way out of it: a reader who wanted to star the project, file an issue or read the source had
+  nowhere to click, and the services that pair a package with its repository had nothing to pair.
+
+  `keywords` was empty and `description` carried the tagline, which between them left the package
+  unreachable by search. Three queries were put to the live registry before the change — a Claude
+  Code dashboard, a TUI dev server, an agent dev server watcher — and each returned eight other
+  people's packages and not this one. The exact name was the only query that found it. The
+  description now says what the thing does in the nouns somebody would type, and the tagline keeps
+  the place it was already doing its work in, at the top of the README.
+
 - **A live `claude` the CLI kept no session record for is listed too.** A session started by
   another Claude Code session inherits `CLAUDE_CODE_CHILD_SESSION`, and the CLI then writes no
   `~/.claude/sessions/<pid>.json` — so a real session, answering prompts and spending the same
