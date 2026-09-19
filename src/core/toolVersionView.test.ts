@@ -35,6 +35,9 @@ const standing: { version: string | null; latest: string | null; behind: boolean
   },
   { version: '1.0.0-alpha.3', latest: '1.0.0', behind: true, why: 'a prerelease is before its release' },
   { version: '0.155.1', latest: '0.155.1', behind: false, why: 'the same version' },
+  // Two builds of one version are one version. `compareVersions` is where that rule lives, and
+  // this is what stops a standing being decided by the two strings differing.
+  { version: '1.0.0+a', latest: '1.0.0+b', behind: false, why: 'build metadata is not a version difference' },
   { version: null, latest: '0.155.1', behind: false, why: 'the installed version could not be read' },
   { version: '0.155.0', latest: null, behind: false, why: 'upstream could not be read' },
   // Neither ranks against the other, and the screen still owes the person the difference it can

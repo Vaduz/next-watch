@@ -146,8 +146,9 @@ function installedChange(was: ToolVersionRow, now: ToolVersionRow): PendingEvent
  *
  *  And only when the machine is actually behind it. A machine carrying a prerelease is ahead of
  *  every release upstream makes, and telling it `0.155.1 is out (installed 0.156.0-alpha.7)` on
- *  each one is news about somebody else's machine. `isBehind` and not `versionStanding` here, so
- *  the log and the TOOL row say the same thing about a difference neither can rank. */
+ *  each one is news about somebody else's machine. The test is `isBehind`, the same one the TOOL
+ *  row uses, rather than the stricter one an install has to pass: the log and the panel must say
+ *  the same thing about a difference neither of them can rank. */
 function releaseChange(was: ToolVersionRow, now: ToolVersionRow): PendingEvent | null {
   if (now.latest === null || was.latest === null || was.latest === now.latest) return null;
   if (!isBehind(now)) return null;
