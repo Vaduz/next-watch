@@ -240,6 +240,22 @@ describe('toolVersionEvents', () => {
     const events = toolVersionEvents(row({ version: '2.1.235' }), row({ latest: '2.1.237' }));
     expect(events.map(e => e.text)).toEqual(['claude 2.1.235 -> 2.1.236', 'claude 2.1.237 is out (installed 2.1.236)']);
   });
+
+  // A machine somebody put a prerelease on is ahead of every release upstream makes. Announcing
+  // each one at it is news about somebody else's machine, and it used to be the line that ran an
+  // install.
+  it('says nothing about a release the installed version is already past', () => {
+    const ahead = (latest: string): ToolVersionRow[] => row({ version: '2.2.0-alpha.7', latest });
+
+    expect(toolVersionEvents(ahead('2.1.236'), ahead('2.1.237'))).toEqual([]);
+  });
+
+  it('still reports a release the installed prerelease has not reached', () => {
+    const pre = (latest: string): ToolVersionRow[] => row({ version: '2.2.0-alpha.7', latest });
+    const events = toolVersionEvents(pre('2.1.237'), pre('2.2.0'));
+
+    expect(events).toEqual([{ mark: 'version', text: 'claude 2.2.0 is out (installed 2.2.0-alpha.7)' }]);
+  });
 });
 
 describe('stampEvent', () => {

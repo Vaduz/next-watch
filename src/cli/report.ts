@@ -122,11 +122,15 @@ export function maybeAutoUpdate(
   if (!wanted.length || state.versions === null || state.ui.busy !== null) return;
   const [name] = toolsToAutoUpdate(state.versions, state.autoUpdated).filter(n => wanted.includes(n));
   const row = state.versions.find(v => v.name === name);
-  if (row?.latest == null) return;
+  // `version` cannot actually be null here — `toolsToAutoUpdate` picks nothing whose standing is
+  // not `behind`, which already excludes it. The check is for the type, not for a fourth case.
+  if (row?.latest == null || row.version === null) return;
   // Say what it saw before doing it. Without this row the log would hold only `update tool:claude
   // done`, and afterwards there would be no way to tell why the version moved.
   screen.event(Date.now(), 'version', `${row.name} ${row.latest} is out (installed ${row.version}), updating ...`);
-  state.autoUpdated = { ...state.autoUpdated, [row.name]: row.latest };
+  // **Where it started from, not only what it was aiming at.** An installer that lands short of
+  // the target leaves the version somewhere new, and that is what lets the next pass try again.
+  state.autoUpdated = { ...state.autoUpdated, [row.name]: { latest: row.latest, from: row.version } };
   start(toolTarget(row), 'update');
 }
 

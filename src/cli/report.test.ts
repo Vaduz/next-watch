@@ -59,11 +59,26 @@ describe('maybeAutoUpdate', () => {
     const second = run(config(['claude']), state);
 
     expect(first.started).toHaveLength(1);
-    expect(state.autoUpdated).toEqual({ claude: '2.1.280' });
-    // ⚠️ `isBehind` compares strings, so the row still reads as behind until the version is
-    // re-read. Without the memo this would start an install on every pass.
+    expect(state.autoUpdated).toEqual({ claude: { latest: '2.1.280', from: '2.1.273' } });
+    // ⚠️ The versions are only re-read when the update finishes, so the row still reads as behind
+    // on the pass right after one is started. Without the memo that is an install every pass.
     expect(second.started).toEqual([]);
     expect(second.said).toEqual([]);
+  });
+
+  it('runs a second update when the first one landed short of the release it was aiming at', () => {
+    // 2026-09-18: `codex update` resolved 0.155.0 while the watcher was aiming at 0.155.1, and
+    // exited 0. What makes the second pass possible is that the memo written here holds where the
+    // first attempt started from, so a version that moved no longer matches it.
+    const state = stateWith([row('codex', '0.154.0', '0.155.1')]);
+    const first = run(config(['codex']), state);
+    state.versions = [row('codex', '0.155.0', '0.155.1')];
+    const second = run(config(['codex']), state);
+
+    expect(first.started).toEqual([{ key: 'tool:codex', verb: 'update' }]);
+    expect(second.started).toEqual([{ key: 'tool:codex', verb: 'update' }]);
+    expect(second.said).toEqual(['codex 0.155.1 is out (installed 0.155.0), updating ...']);
+    expect(state.autoUpdated).toEqual({ codex: { latest: '0.155.1', from: '0.155.0' } });
   });
 
   const quiet: { name: string; conf: readonly string[]; state: WatchState }[] = [

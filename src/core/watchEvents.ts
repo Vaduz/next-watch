@@ -15,6 +15,7 @@ import { formatUptime } from './term/index.js';
 import type { AgentSessionRow, SshAgentCard, TaskRow, ToolVersionRow, WatchEvent, WatchServerRow } from './types.js';
 import type { Mark, Tone } from './term/index.js';
 import { sshAgentSummary } from './sshAgentView.js';
+import { isBehind } from './toolVersionView.js';
 
 /** The local state read every tick (nothing here reaches the network). */
 export interface LocalSnapshot {
@@ -141,9 +142,15 @@ function installedChange(was: ToolVersionRow, now: ToolVersionRow): PendingEvent
 
 /** A new version appearing upstream. Only reported **when the previous value is known**: a
  *  failed fetch in between would otherwise make the value merely coming back look like a
- *  release. */
+ *  release.
+ *
+ *  And only when the machine is actually behind it. A machine carrying a prerelease is ahead of
+ *  every release upstream makes, and telling it `0.155.1 is out (installed 0.156.0-alpha.7)` on
+ *  each one is news about somebody else's machine. `isBehind` and not `versionStanding` here, so
+ *  the log and the TOOL row say the same thing about a difference neither can rank. */
 function releaseChange(was: ToolVersionRow, now: ToolVersionRow): PendingEvent | null {
   if (now.latest === null || was.latest === null || was.latest === now.latest) return null;
+  if (!isBehind(now)) return null;
   const running = now.version ?? 'unknown';
   return { mark: 'version', text: `${now.name} ${now.latest} is out (installed ${running})` };
 }

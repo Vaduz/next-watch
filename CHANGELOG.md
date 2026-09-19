@@ -2,6 +2,48 @@
 
 ## Unreleased
 
+- **Fixed: an automatic update that landed short of the release it was aiming at was recorded as
+  done, and never tried again.** On 2026-09-18 upstream published `rust-v0.155.1` and the watcher
+  ran `codex update` two minutes later. The installer answered `Resolved version: 0.155.0` —
+  the distribution had not caught up with the GitHub release — installed that, and exited 0. What
+  the watcher wrote down was **the version it was aiming at**, so 0.155.1 counted as attempted,
+  and `toolsToAutoUpdate` never picked `codex` again while `latest` stayed 0.155.1. It sat on
+  0.155.0 for over ten hours, through three quota sessions, until somebody updated it by hand.
+
+  The memo now holds **the installed version the attempt started from** as well as the target, and
+  an attempt is only treated as already made when both still describe where the CLI stands. An
+  installer that moved the version but fell short no longer matches, so the next pass tries once
+  more; 0.154.0 → 0.155.0 would have resolved on the following tick.
+
+  **The protection this memo exists for is untouched**, and is the reason the rule is written this
+  way rather than as a timeout. An update can run, exit 0 and leave the version exactly where it
+  was — an installer that failed quietly, a distribution that never catches up — and the row stays
+  behind for ever. Both halves of the memo still match in that case, so it is not retried, which
+  is what keeps the watcher from running an install every tick and burning through the release
+  API's hourly limit. Each move of the installed version buys exactly one more attempt, because
+  the attempt records where it landed.
+
+- **Fixed: versions are compared as versions, not as text.** `isBehind` asked whether the two
+  strings differed, which was wrong in three ways. It read `0.9.0` as newer than `0.10.0`. It did
+  not know that `1.0.0-alpha.3` comes before `1.0.0`. And — the one that did damage — it called a
+  machine "behind" when the installed version was **newer** than the newest release, which is what
+  a prerelease put on by hand looks like: `0.155.1 is out (installed 0.156.0-alpha.7)` on the row
+  and in the log at every release, and an automatic install sent after a version the machine was
+  already past.
+
+  Ranking is now semver's own: numeric places compared as numbers, a prerelease before the release
+  it leads to, prerelease identifiers compared one at a time with numbers ranking below text, and
+  build metadata ignored. **No dependency was added** — the rules are shorter than the smallest
+  package that implements them, and they are in `core/` as a pure function with its own table of
+  cases, semver's published example chain among them.
+
+  Two predicates now, because showing and installing are not the same question. The screen still
+  points at `latest` when the two differ in a way **nothing can rank** — hiding a difference the
+  watcher can plainly see would be worse than showing one it cannot explain — while an automatic
+  update requires a version comparison that actually came out `behind`. Between them this removes
+  the case the memo's warning used to name: a prerelease installed against an older release now
+  ranks as ahead and is never picked at all.
+
 - **`npm publish` empties `dist/` and builds it again first.** There was no `prepublishOnly`, so
   publishing shipped whatever happened to be sitting in `dist/` at that moment — the tarball's
   contents depended on when the last `bun run build` had been run rather than on what the source
