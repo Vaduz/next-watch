@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.1
 
 - **Fixed: an automatic update that landed short of the release it was aiming at was recorded as
   done, and never tried again.** On 2026-09-18 upstream published `rust-v0.155.1` and the watcher
@@ -44,10 +44,14 @@
   the case the memo's warning used to name: a prerelease installed against an older release now
   ranks as ahead and is never picked at all.
 
-- **`npm publish` empties `dist/` and builds it again first.** There was no `prepublishOnly`, so
-  publishing shipped whatever happened to be sitting in `dist/` at that moment — the tarball's
-  contents depended on when the last `bun run build` had been run rather than on what the source
-  said. 0.7.0 was correct only because a build had just been run by hand.
+- **`npm publish` empties `dist/` and builds it again first — and this release is 0.7.0 published
+  again, because 0.7.0 went out without one.** There was no `prepublishOnly`, so publishing shipped
+  whatever happened to be sitting in `dist/` at that moment. In 0.7.0's case that was nothing:
+  **the tarball holds five files** — `package.json`, the README, the licence, the notice and
+  `bin/next-watch.js` — against 421 in 0.5.0 and 425 in 0.6.0. Installing it and running the
+  binary ends at `ERR_MODULE_NOT_FOUND` on `dist/cli/main.js`, which is the first line
+  `bin/next-watch.js` imports. **0.7.0 could not start, and 0.7.1 is the version that carries what
+  it was meant to.**
 
   The build alone would not have been enough. `tsc` writes outputs but never removes them, so a
   source file that is renamed or deleted leaves its `.js`, `.d.ts` and both maps behind in `dist/`
