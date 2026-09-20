@@ -695,9 +695,9 @@ lines are worth more there than an empty box.
 
 ## Development
 
-The toolchain is [bun](https://bun.sh): `bun install`, then `bun run lint`, `bun run typecheck`,
-`bun test`, `bun run build`. **Using the package needs only node 22 or later** — what is published
-is plain ESM, and it runs under bun as well.
+The toolchain is [bun](https://bun.sh); **using the package needs only node 22 or later**, because
+what is published is plain ESM. The checks, the layering and the release rules are in
+[CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ---
 
