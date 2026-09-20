@@ -27,84 +27,100 @@ One screen, redrawn in place. Two servers, the live agent sessions, the service 
 quota window each CLI is keeping open, and an event log of everything the watch has done:
 
 ```
-╭─ next-watch 0.5.0  13:34:17  up 28s ───────────────────────────────────────────────────────────╮
-│ REPO     /tmp/nw-shot/site  main 4bb9081  1 commit(s) behind origin/main                       │
-│          nothing pulled during this watch · next git check 3573s                               │
+╭─ next-watch 0.7.1  19:38:52  up 3m ────────────────────────────────────────────────────────────╮
+│ REPO     /tmp/nw-shot/site  main 0dad03c  1 commit(s) behind origin/main                       │
+│          last pull 19:36:05 (2m ago, 2 commit(s)) · next git check 14s                         │
 │ SSH      ssh-agent: 1 key(s) loaded                                                            │
 │                                                                                                │
 │    SERVER  STATE  URL                    OWNER        MODE  UPTIME                             │
-│    web     up     http://localhost:3400  pid 1133095  bun      27s                             │
-│    admin   up     http://localhost:3401  pid 1133107  bun      27s                             │
+│    web     up     http://localhost:3400  pid 1641775  bun       2m                             │
+│    admin   up     http://localhost:3401  pid 1641894  bun       2m                             │
 │                                                                                                │
 │ Claude  Max 20x                                                                                │
-│   5h         0%  ····················  resets 17:50 (in 4h15m)                                 │
-│   7d        58%  ███████████▋········  resets 07:00 (in 2d17h)                                 │
-│   Fable 7d  76%  ███████████████▎····  resets 07:00 (in 2d17h)  13m ago                        │
+│   5h        14%  ██▊·················  resets 20:50 (in 1h11m)                                 │
+│   7d         5%  █···················  resets 07:00 (in 6d11h)                                 │
+│   Fable 7d   5%  █···················  resets 07:00 (in 6d11h)  3m ago                         │
 │ Codex   Plus                                                                                   │
-│   5h         0%  ····················  resets 18:31 (in 4h57m)                                 │
-│   7d        14%  ██▊·················  resets 00:20 (in 2d10h)  28s ago                        │
+│   5h         0%  ····················  resets 21:32 (in 1h53m)                                 │
+│   7d         1%  ▎···················  resets 00:35 (in 6d4h)   47s ago                        │
 │                                                                                                │
-│ SESSION  TREE        AGENT   STATUS  MODEL      CONTEXT  IDLE    VER                           │
-│   site-5a                                                                                      │
-│          site        claude  idle    opus-5         38k      2m  2.1.274                       │
-│   site-4e                                                                                      │
-│          site        claude  idle    opus-5         38k    1h4m  2.1.274                       │
+│ SESSION  TREE              AGENT   STATUS  MODEL      CONTEXT  IDLE    VER                     │
+│   site-09                                                                                      │
+│          site              claude  idle    -                -     30s  2.1.278                 │
 │            not in tmux · (r)estart needs tmux                                                  │
+│ › site-fc                                                                                      │
+│          site              claude  idle    opus-5         41k      1m  2.1.278                 │
 │                                                                                                │
 │    SERVICE  Claude  ●  All Systems Operational                                                 │
-│             session: off                                                                       │
+│             session: auto · next refresh when the window closes (20:50)                        │
 │             OpenAI  ●  All Systems Operational                                                 │
-│             session: auto · next refresh when the window closes (18:31)                        │
+│             session: auto · next refresh when the window closes (21:32)                        │
 │                                                                                                │
-│ TOOL     claude 2.1.274 · codex 0.154.0                                                        │
+│ TOOL     claude 2.1.278 · codex 0.155.1                                                        │
 ├─ event log ────────────────────────────────────────────────────────────────────────────────────┤
-│ 13:28:03 ⇣ pulled 2 commit(s)  daf3f9f -> 4bb9081                                              │
-│ 13:28:03 ·   4bb9081  fix(web): the page greeting   Dev  20s ago                               │
-│ 13:28:03 ·   d8ce354  feat(web): a badge component  Dev  20s ago                               │
-│ 13:28:03 ·   2 file(s)  +2 -1  web/ 2                                                          │
-│ 13:28:03 ·   -> restart web                                                                    │
-│ 13:28:03 ○ web: stopping pid 955144, 955145                                                    │
-│ 13:28:04 ○ web stopped                                                                         │
-│ 13:28:04 ○ web: bun run dev                                                                    │
-│ 13:28:04 ○ web is listening on http://localhost:3400                                           │
-│ 13:29:40 ✧ claude 2.1.274 is out (installed 2.1.273), updating ...                             │
-│ 13:29:41 » update tool:claude ...                                                              │
-│ 13:29:42 ·   Updating to 2.1.274...                                                            │
-│ 13:29:43 ✧ claude 2.1.273 -> 2.1.274                                                           │
-│ 13:29:44 » update tool:claude done 4.1s                                                        │
-│ 13:31:24 » restart server:admin ...                                                            │
-│ 13:31:24 ○ admin: bun run build:admin ...                                                      │
-│ 13:31:24 ·   $ node -e "console.log('compiled 14 routes')"                                     │
-│ 13:31:24 ·   compiled 14 routes                                                                │
-│ 13:31:24 ○ admin: build:admin done                                                             │
-│ 13:31:24 ○ admin: stopping pid 955153, 955154                                                  │
-│ 13:31:24 ○ admin stopped                                                                       │
-│ 13:31:24 ○ admin: bun run admin                                                                │
-│ 13:31:25 ○ admin is listening on http://localhost:3401                                         │
-│ 13:31:25 » restart server:admin done 0.3s                                                      │
-│ 13:31:25 ✎ Codex quota session is closed (5h window reset 0min ago, 0% used), opening it with  │
+│ 19:34:10 ✧ claude 2.1.278 is out (installed 2.1.277), updating ...                             │
+│ 19:34:10 » update tool:claude ...                                                              │
+│ 19:34:10 ·   Updating to 2.1.278...                                                            │
+│ 19:34:14 ✧ claude 2.1.277 -> 2.1.278                                                           │
+│ 19:34:14 » update tool:claude done 4.2s                                                        │
+│ 19:35:25 ✎ Codex quota session is closed (5h window reset 0min ago, 0% used), opening it with  │
 │            codex exec --skip-git-repo-check "hi" ...                                           │
-│ 13:31:29 ○ codex exec --skip-git-repo-check "hi" done 4.2s                                     │
-│ 13:32:01 » restart session:867126 ...                                                          │
-│ 13:32:01 ○ SIGTERM to session 867126 in pane %35                                               │
-│ 13:32:02 ◆ session ended: site-6a [site]                                                       │
-│ 13:32:03 ○ typed "claude --resume 4d717cc5-942a-496a-a5e8-1e44c364bf66" into pane %35          │
-│ 13:32:03 » restart session:867126 done 1.4s                                                    │
-│ 13:32:05 ◆ session started: site-5a [site]                                                     │
-│ 13:32:26 ▲ 1 commit(s) waiting on origin/main, not pulling                                     │
-│ 13:32:26 ·   db/data.txt - this machine owns the database                                      │
-│ 13:32:26 ·   look at them and pull by hand.                                                    │
+│ 19:35:29 ○ codex exec --skip-git-repo-check "hi" done 4.2s                                     │
+│ 19:36:05 ⇣ pulled 2 commit(s)  0b35484 -> 0dad03c                                              │
+│ 19:36:05 ·   0dad03c  fix(web): the page greeting   Dev  21s ago                               │
+│ 19:36:05 ·   c1f3bf0  feat(web): a badge component  Dev  21s ago                               │
+│ 19:36:05 ·   2 file(s)  +2 -1  web/ 2                                                          │
+│ 19:36:05 ·   -> restart web / restart admin                                                    │
+│ 19:36:05 ○ web: stopping pid 1638027, 1638028                                                  │
+│ 19:36:05 ○ web stopped                                                                         │
+│ 19:36:05 ○ web: bun run dev                                                                    │
+│ 19:36:05 ○ web is listening on http://localhost:3400                                           │
+│ 19:36:05 ○ admin: bun run build:admin ...                                                      │
+│ 19:36:05 ·   $ node -e "console.log('compiled 14 routes')"                                     │
+│ 19:36:05 ·   compiled 14 routes                                                                │
+│ 19:36:05 ○ admin: build:admin done                                                             │
+│ 19:36:05 ○ admin: stopping pid 1638040, 1638041                                                │
+│ 19:36:05 ○ admin stopped                                                                       │
+│ 19:36:05 ○ admin: bun run admin                                                                │
+│ 19:36:05 ○ admin is listening on http://localhost:3401                                         │
+│ 19:37:05 ▲ 1 commit(s) waiting on origin/main, not pulling                                     │
+│ 19:37:05 ·   db/data.txt - this machine owns the database                                      │
+│ 19:37:05 ·   look at them and pull by hand.                                                    │
+│ 19:37:31 » restart session:1634337 ...                                                         │
+│ 19:37:31 ○ SIGTERM to session 1634337 in pane %42                                              │
+│ 19:37:31 ✱ session renamed: site-b5 -> (no record) pid 1634337 [site]                          │
+│ 19:37:33 ○ typed "claude --resume 0422fe2c-4054-4e8d-aa87-b4272a8fa86c" into pane %42          │
+│ 19:37:33 » restart session:1634337 done 1.4s                                                   │
+│ 19:37:33 ◆ session started: (no record) pid 1648061 [site]                                     │
+│ 19:37:33 ◆ session ended: (no record) pid 1634337 [site]                                       │
+│ 19:37:34 ✱ session renamed: (no record) pid 1648061 -> site-fc [site]                          │
 ├─ web access  /tmp/nw-shot/site/log/web.txt ────────────────────────────────────────────────────┤
-│ 13:32:09  GET                404  12ms  /missing                                               │
-│ 13:32:09  GET                200  11ms  /                                                      │
-│ 13:32:09  GET                404  11ms  /missing                                               │
+│           $ node server.mjs web 3400                                                           │
+│ 19:33:08  ready in 412ms                                                                       │
+│ 19:33:26  GET                         200  13ms  /                                             │
+│ 19:33:26  GET                         404  11ms  /missing                                      │
+│ 19:33:26  GET                         200  10ms  /                                             │
+│ 19:33:26  GET                         404  10ms  /missing                                      │
+│ 19:33:26  GET                         200  12ms  /                                             │
+│ 19:33:26  GET                         404  11ms  /missing                                      │
+│ 19:37:48  GET                         200  10ms  /                                             │
+│ 19:37:48  GET                         404  10ms  /missing                                      │
+│ 19:37:48  GET                         200  10ms  /                                             │
+│ 19:37:48  GET                         404  13ms  /missing                                      │
+│ 19:37:48  GET                         200  11ms  /                                             │
+│ 19:37:48  GET                         404  12ms  /missing                                      │
 ├─ admin access  /tmp/nw-shot/site/log/admin.txt ────────────────────────────────────────────────┤
-│ 12:23:14  GET               200  12ms  /                                                       │
-│ 12:23:14  GET               200  11ms  /                                                       │
-│ 12:23:15  GET               200  12ms  /                                                       │
+│           $ node server.mjs admin 3401                                                         │
+│ 19:33:08  ready in 412ms                                                                       │
+│ 19:33:26  GET                           200  12ms  /                                           │
+│ 19:33:26  GET                           200  10ms  /                                           │
+│ 19:33:26  GET                           200  13ms  /                                           │
+│ 19:37:48  GET                           200  13ms  /                                           │
+│ 19:37:48  GET                           200  12ms  /                                           │
+│ 19:37:48  GET                           200  12ms  /                                           │
 ╰────────────────────────────────────────────────────────────────────────────────────────────────╯
 
-  ⠼ Tab select · up/down scroll · (h)elp · (q)uit
+  ⠙ session:1648061  (r)estart | (s)top
 ```
 
 ## What it does
