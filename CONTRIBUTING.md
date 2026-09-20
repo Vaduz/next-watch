@@ -68,9 +68,9 @@ Comments explain **why** — the reason, the measured number, or the failure tha
 shape. The code already says what it does.
 
 The standing decisions about this repository are in [AGENTS.md](./AGENTS.md): the layering rule,
-the toolchain pins, how the README's dashboard capture is produced, and the release sequence. It
-is written for the coding agents that work here, but it is the honest answer to "why is it like
-this", so read it before changing something that looks arbitrary.
+the toolchain pins, the staging rules, and the release sequence. It is written for the coding
+agents that work here, but it is the honest answer to "why is it like this", so read it before
+changing something that looks arbitrary.
 
 Everything in the code, the comments, the documentation and the commit messages is in English.
 
